@@ -1,0 +1,112 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /usuarios/{userId} {
+
+      function esPropietario() {
+        return request.auth != null
+          && request.auth.uid == userId;
+      }
+
+      allow read: if esPropietario();
+
+      allow create: if esPropietario()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.correoPrincipal
+          == request.auth.token.email;
+
+      allow update: if esPropietario()
+        && !request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasAny([
+            'uid',
+            'correoPrincipal',
+            'fechaCreacion'
+          ]);
+
+      allow delete: if false;
+
+
+      // =====================================================
+      // ASIGNATURAS
+      // =====================================================
+
+      match /asignaturas/{asignaturaId} {
+        allow read: if esPropietario();
+        allow create: if esPropietario();
+        allow update: if esPropietario();
+        allow delete: if esPropietario();
+      }
+
+
+      // =====================================================
+      // TAREAS
+      // =====================================================
+
+      match /tareas/{tareaId} {
+        allow read: if esPropietario();
+        allow create: if esPropietario();
+        allow update: if esPropietario();
+        allow delete: if esPropietario();
+      }
+
+
+      // =====================================================
+      // EVALUACIONES
+      // =====================================================
+
+      match /evaluaciones/{evaluacionId} {
+        allow read: if esPropietario();
+        allow create: if esPropietario();
+        allow update: if esPropietario();
+        allow delete: if esPropietario();
+      }
+
+
+      // =====================================================
+      // NOTIFICACIONES
+      // =====================================================
+
+      match /estadoNotificaciones/{notificationId} {
+        allow read: if esPropietario();
+        allow create: if esPropietario();
+        allow update: if esPropietario();
+        allow delete: if esPropietario();
+      }
+
+
+      // =====================================================
+      // DISPOSITIVOS PUSH
+      // =====================================================
+
+      match /dispositivosPush/{dispositivoId} {
+        allow read: if esPropietario();
+        allow create: if esPropietario();
+        allow update: if esPropietario();
+        allow delete: if esPropietario();
+      }
+
+
+      // =====================================================
+      // CHATS DE EDUCFLOW AI
+      // =====================================================
+
+      match /chats/{chatId} {
+        allow read: if esPropietario();
+        allow create: if esPropietario();
+        allow update: if esPropietario();
+        allow delete: if esPropietario();
+
+        match /mensajes/{mensajeId} {
+          allow read: if esPropietario();
+          allow create: if esPropietario();
+          allow update: if esPropietario();
+          allow delete: if esPropietario();
+        }
+      }
+    }
+  }
+}

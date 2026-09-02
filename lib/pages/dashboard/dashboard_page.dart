@@ -1,0 +1,2146 @@
+import 'package:flutter/material.dart';
+
+import '../../core/auth/auth_service.dart';
+import '../../models/asignatura.dart';
+import '../../models/perfil_usuario.dart';
+import '../../services/asignaturas_service.dart';
+import '../../services/beta_notice_service.dart';
+import '../../services/perfil_service.dart';
+import '../../services/translation_service.dart';
+import '../login/login_page.dart';
+import '../../widgets/main_bottom_nav.dart';
+import '../../widgets/app_reveal.dart';
+import '../../widgets/app_scroll_header.dart';
+import '../profile/profile_page.dart';
+import '../settings/settings_page.dart';
+import '../subjects/subjects_page.dart';
+import '../calendar/calendar_page.dart';
+import '../schedule/schedule_page.dart';
+import '../../services/time_format_service.dart';
+import '../tasks/tasks_page.dart';
+import '../notifications/notifications_page.dart';
+import '../ai/ai_chat_page.dart';
+
+import 'package:flutter/services.dart';
+
+import '../../widgets/app_pressable.dart';
+import '../../widgets/beta_notice_dialog.dart';
+
+class DashboardPage extends StatefulWidget {
+  const DashboardPage({super.key});
+
+  @override
+  State<DashboardPage> createState() => _DashboardPageState();
+}
+
+class _DashboardPageState extends State<DashboardPage> {
+  final AuthService _authService = AuthService();
+
+  final PerfilService _perfilService = PerfilService();
+
+  final AsignaturasService _asignaturasService = AsignaturasService.instance;
+
+  final TranslationService _translationService = TranslationService.instance;
+
+  final TimeFormatService _timeFormatService = TimeFormatService.instance;
+
+  final BetaNoticeService _betaNoticeService = BetaNoticeService.instance;
+
+  final ScrollController _scrollController = ScrollController();
+
+  double _progresoHeader = 0.0;
+
+  PerfilUsuario? _perfil;
+
+  List<Asignatura> _asignaturas = [];
+  List<_ClaseDashboard> _clasesHoy = [];
+
+  bool _cargandoPerfil = true;
+  bool _errorPerfil = false;
+
+  bool _cargandoContenido = true;
+  bool _errorContenido = false;
+
+  bool _cerrandoSesion = false;
+
+  int _versionAsignaturasCargada = -1;
+
+  static const Color _primaryColor = Color(0xFF5B5FEF);
+
+  bool get _espanol => _translationService.isSpanish;
+
+  // =========================================================
+  // DATOS DERIVADOS
+  // =========================================================
+
+  bool get _tieneContenido => _asignaturas.isNotEmpty;
+
+  bool get _tieneHorarioConfigurado {
+    return _asignaturas.any((asignatura) => asignatura.horario.isNotEmpty);
+  }
+
+  int get _totalAsignaturas => _asignaturas.length;
+
+  int get _totalClasesHoy => _clasesHoy.length;
+
+  String get _nombreUsuario {
+    final String nombrePerfil = _perfil?.nombre.trim() ?? '';
+
+    if (nombrePerfil.isNotEmpty) {
+      return nombrePerfil;
+    }
+
+    final String nombreAuth =
+        _authService.usuarioActual?.displayName?.trim() ?? '';
+
+    if (nombreAuth.isNotEmpty) {
+      return nombreAuth;
+    }
+
+    return _espanol ? 'Estudiante' : 'Student';
+  }
+
+  String get _primerNombre {
+    final List<String> partes = _nombreUsuario
+        .split(RegExp(r'\s+'))
+        .where((parte) => parte.trim().isNotEmpty)
+        .toList();
+
+    if (partes.isEmpty) {
+      return _espanol ? 'Estudiante' : 'Student';
+    }
+
+    return partes.first;
+  }
+
+  String get _inicialesUsuario {
+    final List<String> partes = _nombreUsuario
+        .split(RegExp(r'\s+'))
+        .where((parte) => parte.trim().isNotEmpty)
+        .toList();
+
+    if (partes.isEmpty) {
+      return 'EF';
+    }
+
+    if (partes.length == 1) {
+      final String nombre = partes.first;
+
+      if (nombre.length == 1) {
+        return nombre.toUpperCase();
+      }
+
+      return nombre.substring(0, 2).toUpperCase();
+    }
+
+    return '${partes.first[0]}${partes.last[0]}'.toUpperCase();
+  }
+
+  bool get _perfilIncompleto {
+    return _perfil != null && !_perfil!.perfilCompleto;
+  }
+
+  bool get _esNivelEscolar {
+    final NivelEducativoPerfil nivel =
+        _perfil?.nivelEducativo ?? NivelEducativoPerfil.vacio;
+
+    return nivel == NivelEducativoPerfil.basica ||
+        nivel == NivelEducativoPerfil.media;
+  }
+
+  bool get _esNivelSuperior {
+    final NivelEducativoPerfil nivel =
+        _perfil?.nivelEducativo ?? NivelEducativoPerfil.vacio;
+
+    return nivel == NivelEducativoPerfil.tecnico ||
+        nivel == NivelEducativoPerfil.superior;
+  }
+
+  String get _descripcionAgregarAsignaturas {
+    if (_espanol) {
+      if (_esNivelEscolar) {
+        return 'Registra las asignaturas que tienes este año para organizar tus clases, tareas y horario escolar.';
+      }
+
+      if (_esNivelSuperior) {
+        return 'Registra los ramos que cursas actualmente para organizar tus clases, profesores y horario.';
+      }
+
+      return 'Registra las materias o módulos que estudias actualmente para organizar toda tu información académica.';
+    }
+
+    if (_esNivelEscolar) {
+      return 'Add the subjects you have this year to organize your classes, tasks and school schedule.';
+    }
+
+    if (_esNivelSuperior) {
+      return 'Add the courses you are currently taking to organize your classes, teachers and schedule.';
+    }
+
+    return 'Add the subjects or modules you are currently studying to organize your academic information.';
+  }
+
+  String get _descripcionConfigurarHorario {
+    if (_espanol) {
+      if (_esNivelEscolar) {
+        return 'Agrega los días y horas de tus clases para que EduFlow AI pueda organizar tu semana escolar y mostrarte qué tienes hoy.';
+      }
+
+      if (_esNivelSuperior) {
+        return 'Configura los bloques de tus ramos para ver tus clases del día, salas y próximas clases desde el inicio.';
+      }
+
+      return 'Agrega los días y horarios de tus materias para organizar tu semana académica.';
+    }
+
+    if (_esNivelEscolar) {
+      return 'Add the days and times of your classes so EduFlow AI can organize your school week and show what you have today.';
+    }
+
+    if (_esNivelSuperior) {
+      return 'Set up your course blocks to see today\'s classes, rooms and upcoming classes from the home screen.';
+    }
+
+    return 'Add the days and times of your subjects to organize your academic week.';
+  }
+
+  _ClaseDashboard? get _proximaClase {
+    if (_clasesHoy.isEmpty) {
+      return null;
+    }
+
+    final DateTime ahora = DateTime.now();
+
+    final int minutosActuales = (ahora.hour * 60) + ahora.minute;
+
+    for (final _ClaseDashboard clase in _clasesHoy) {
+      if (_horaAMinutos(clase.horaInicio) >= minutosActuales) {
+        return clase;
+      }
+    }
+
+    return null;
+  }
+
+  // =========================================================
+  // CICLO DE VIDA
+  // =========================================================
+
+  void _feedbackSuave() {
+    HapticFeedback.selectionClick();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+
+    _translationService.addListener(_actualizarIdioma);
+    _timeFormatService.addListener(_actualizarFormatoHora);
+
+    _scrollController.addListener(_escucharScroll);
+
+    _cargarDashboard();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _mostrarBienvenidaBeta();
+    });
+  }
+
+  @override
+  void dispose() {
+    _translationService.removeListener(_actualizarIdioma);
+    _timeFormatService.removeListener(_actualizarFormatoHora);
+    _scrollController.removeListener(_escucharScroll);
+
+    _scrollController.dispose();
+
+    super.dispose();
+  }
+
+  Future<void> _mostrarBienvenidaBeta() async {
+    final bool mostrar = await _betaNoticeService.shouldShow(
+      BetaNoticeKind.welcome,
+    );
+
+    if (!mounted || !mostrar) {
+      return;
+    }
+
+    await showBetaNoticeDialog(
+      context,
+      spanish: _espanol,
+      kind: BetaNoticeKind.welcome,
+    );
+
+    await _betaNoticeService.markShown(BetaNoticeKind.welcome);
+  }
+
+  void _actualizarIdioma() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  void _actualizarFormatoHora() {
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {});
+  }
+
+  void _escucharScroll() {
+    if (!_scrollController.hasClients) {
+      return;
+    }
+
+    final double offset = _scrollController.offset;
+
+    const double inicio = 45;
+    const double fin = 145;
+
+    final double progreso = ((offset - inicio) / (fin - inicio)).clamp(
+      0.0,
+      1.0,
+    );
+
+    if ((progreso - _progresoHeader).abs() < 0.01) {
+      return;
+    }
+
+    setState(() {
+      _progresoHeader = progreso;
+    });
+  }
+
+  // =========================================================
+  // CARGA
+  // =========================================================
+
+  Future<void> _cargarDashboard() async {
+    await Future.wait([_cargarPerfil(), _cargarContenido()]);
+  }
+
+  Future<void> _cargarPerfil({bool silencioso = false}) async {
+    if (!silencioso) {
+      setState(() {
+        _cargandoPerfil = true;
+        _errorPerfil = false;
+      });
+    }
+
+    try {
+      final usuario = _authService.usuarioActual;
+
+      if (usuario == null) {
+        if (!mounted) {
+          return;
+        }
+
+        await _volverAlLogin();
+
+        return;
+      }
+
+      final PerfilUsuario? perfil = await _perfilService.obtenerPerfil(
+        usuario.uid,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _perfil = perfil;
+        _errorPerfil = perfil == null;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      if (!silencioso) {
+        setState(() {
+          _errorPerfil = true;
+        });
+      }
+    } finally {
+      if (mounted && !silencioso) {
+        setState(() {
+          _cargandoPerfil = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _cargarContenido({
+    bool forzar = false,
+    bool silencioso = false,
+  }) async {
+    if (!forzar &&
+        _versionAsignaturasCargada == _asignaturasService.versionDatos &&
+        _versionAsignaturasCargada != -1) {
+      return;
+    }
+
+    if (!silencioso) {
+      setState(() {
+        _cargandoContenido = true;
+        _errorContenido = false;
+      });
+    }
+
+    try {
+      final List<Asignatura> asignaturas = await _asignaturasService
+          .obtenerTodas();
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _asignaturas = asignaturas;
+
+        _generarClasesDeHoy();
+
+        _versionAsignaturasCargada = _asignaturasService.versionDatos;
+
+        _errorContenido = false;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      // Si ya había contenido visible durante
+      // un refresh, no lo borramos por un
+      // problema temporal de conexión.
+      if (!silencioso) {
+        setState(() {
+          _asignaturas = [];
+          _clasesHoy = [];
+          _errorContenido = true;
+        });
+      }
+    } finally {
+      if (mounted && !silencioso) {
+        setState(() {
+          _cargandoContenido = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _refrescar() async {
+    await Future.wait([
+      _cargarPerfil(silencioso: true),
+      _cargarContenido(forzar: true, silencioso: true),
+    ]);
+  }
+
+  // =========================================================
+  // CLASES DE HOY
+  // =========================================================
+
+  void _generarClasesDeHoy() {
+    final DiaSemana? diaActual = _diaSemanaActual();
+
+    if (diaActual == null) {
+      _clasesHoy = [];
+
+      return;
+    }
+
+    final List<_ClaseDashboard> clases = [];
+
+    for (final Asignatura asignatura in _asignaturas) {
+      for (final BloqueHorario bloque in asignatura.horario) {
+        if (bloque.dia != diaActual) {
+          continue;
+        }
+
+        final String salaBloque = bloque.sala?.trim() ?? '';
+
+        final String salaAsignatura = asignatura.sala?.trim() ?? '';
+
+        final String sala = salaBloque.isNotEmpty ? salaBloque : salaAsignatura;
+
+        final String profesor = asignatura.profesor?.trim() ?? '';
+
+        clases.add(
+          _ClaseDashboard(
+            asignaturaId: asignatura.id,
+            nombre: asignatura.nombre,
+            sala: sala.isNotEmpty ? sala : (_espanol ? 'Sin sala' : 'No room'),
+            profesor: profesor.isNotEmpty
+                ? profesor
+                : (_espanol ? 'Sin profesor' : 'No teacher'),
+            horaInicio: bloque.horaInicio,
+            horaFin: bloque.horaFin,
+          ),
+        );
+      }
+    }
+
+    clases.sort((a, b) => a.horaInicio.compareTo(b.horaInicio));
+
+    _clasesHoy = clases;
+  }
+
+  DiaSemana? _diaSemanaActual() {
+    switch (DateTime.now().weekday) {
+      case DateTime.monday:
+        return DiaSemana.lunes;
+
+      case DateTime.tuesday:
+        return DiaSemana.martes;
+
+      case DateTime.wednesday:
+        return DiaSemana.miercoles;
+
+      case DateTime.thursday:
+        return DiaSemana.jueves;
+
+      case DateTime.friday:
+        return DiaSemana.viernes;
+
+      case DateTime.saturday:
+        return DiaSemana.sabado;
+
+      case DateTime.sunday:
+        return null;
+
+      default:
+        return null;
+    }
+  }
+
+  int _horaAMinutos(String hora) {
+    final List<String> partes = hora.split(':');
+
+    if (partes.length < 2) {
+      return 0;
+    }
+
+    final int horas = int.tryParse(partes[0]) ?? 0;
+
+    final int minutos = int.tryParse(partes[1]) ?? 0;
+
+    return (horas * 60) + minutos;
+  }
+
+  String _mostrarHora(String hora) {
+    return _timeFormatService.formatStoredTime(context, hora);
+  }
+
+  // =========================================================
+  // LOGOUT
+  // =========================================================
+
+  Future<void> _cerrarSesion() async {
+    if (_cerrandoSesion) {
+      return;
+    }
+
+    setState(() {
+      _cerrandoSesion = true;
+    });
+
+    try {
+      await _authService.cerrarSesion();
+
+      if (!mounted) {
+        return;
+      }
+
+      await _volverAlLogin();
+    } finally {
+      if (mounted) {
+        setState(() {
+          _cerrandoSesion = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _volverAlLogin() async {
+    await Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginPage()),
+      (_) => false,
+    );
+  }
+
+  Future<void> _abrirPerfil({bool completar = false}) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ProfilePage(startInEditMode: completar),
+      ),
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    await _cargarPerfil();
+  }
+
+  Future<void> _abrirAjustes() async {
+    await Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const SettingsPage()));
+  }
+
+  Future<void> _abrirAsignaturas() async {
+    await Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const SubjectsPage()));
+
+    if (!mounted) {
+      return;
+    }
+
+    await _cargarContenido(forzar: true, silencioso: true);
+  }
+
+  Future<void> _abrirTareas() async {
+    await Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const TasksPage()));
+  }
+
+  Future<void> _abrirHorario() async {
+    await Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const SchedulePage()));
+
+    if (!mounted) {
+      return;
+    }
+
+    await _cargarContenido(forzar: true, silencioso: true);
+  }
+
+  Future<void> _abrirCalendario() async {
+    await Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const CalendarPage()));
+
+    if (!mounted) {
+      return;
+    }
+
+    await _cargarContenido(forzar: true, silencioso: true);
+  }
+
+  Future<void> _abrirNotificaciones() async {
+    HapticFeedback.selectionClick();
+
+    await Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const NotificationsPage()));
+
+    if (!mounted) {
+      return;
+    }
+
+    await _cargarContenido(forzar: true, silencioso: true);
+  }
+
+  // =========================================================
+  // EDUCFLOW AI
+  // =========================================================
+
+  Future<void> _abrirIA() async {
+    HapticFeedback.selectionClick();
+
+    await Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const AiChatPage()));
+  }
+
+  // =========================================================
+  // BUILD
+  // =========================================================
+
+  @override
+  Widget build(BuildContext context) {
+    final bool oscuro = Theme.of(context).brightness == Brightness.dark;
+
+    return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: SafeArea(
+              bottom: false,
+              child: RefreshIndicator(
+                color: _primaryColor,
+                onRefresh: _refrescar,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final double ancho = constraints.maxWidth;
+
+                    final double horizontal = ancho <= 480
+                        ? 7
+                        : ancho <= 700
+                        ? 14
+                        : 28;
+
+                    final double paddingInferior = ancho <= 480 ? 110 : 145;
+
+                    return ListView(
+                      controller: _scrollController,
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: EdgeInsets.fromLTRB(
+                        horizontal,
+                        22,
+                        horizontal,
+                        paddingInferior,
+                      ),
+                      children: [
+                        Transform.translate(
+                          offset: Offset(0, -10 * _progresoHeader),
+                          child: Transform.scale(
+                            alignment: Alignment.topLeft,
+                            scale: 1 - (0.015 * _progresoHeader),
+                            child: Opacity(
+                              opacity: 1 - _progresoHeader,
+                              child: _buildTopbar(oscuro),
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        if (_cargandoPerfil)
+                          _buildLoading(oscuro)
+                        else if (_errorPerfil)
+                          _buildProfileError(oscuro)
+                        else if (_perfilIncompleto)
+                          _buildWelcomeCard(oscuro)
+                        else if (_cargandoContenido)
+                          _buildContentLoading(oscuro)
+                        else if (_errorContenido)
+                          _buildContentError(oscuro)
+                        else if (!_tieneContenido)
+                          _buildSubjectsSetupCard(oscuro)
+                        else if (!_tieneHorarioConfigurado)
+                          _buildScheduleSetupCard(oscuro)
+                        else ...[
+                          _buildSummarySection(oscuro, ancho),
+
+                          const SizedBox(height: 18),
+
+                          _buildContentSection(oscuro, ancho),
+                        ],
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: AppScrollHeader(
+              progress: _progresoHeader,
+              title: _espanol ? 'Inicio' : 'Home',
+              trailing: _buildCompactProfileButton(oscuro),
+            ),
+          ),
+
+          MainBottomNav(
+            currentIndex: 0,
+
+            onHome: () {},
+
+            onSchedule: _abrirHorario,
+
+            onAi: _abrirIA,
+
+            onCalendar: _abrirCalendario,
+
+            onNotifications: _abrirNotificaciones,
+          ),
+        ],
+      ),
+    );
+  }
+
+  // =========================================================
+  // TOPBAR
+  // =========================================================
+
+  Widget _buildTopbar(bool oscuro) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'EDUCFLOW AI',
+                style: TextStyle(
+                  color: _primaryColor,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.2,
+                ),
+              ),
+
+              const SizedBox(height: 5),
+
+              Text(
+                _cargandoPerfil
+                    ? (_espanol ? 'Cargando...' : 'Loading...')
+                    : (_espanol
+                          ? 'Hola, $_primerNombre 👋'
+                          : 'Hi, $_primerNombre 👋'),
+                style: TextStyle(
+                  color: oscuro
+                      ? const Color(0xFFF8FAFC)
+                      : const Color(0xFF111827),
+                  fontSize: 31,
+                  height: 1.08,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -1,
+                ),
+              ),
+
+              const SizedBox(height: 8),
+
+              Text(
+                _espanol
+                    ? 'Tu espacio académico personal.'
+                    : 'Your personal academic space.',
+                style: TextStyle(
+                  color: oscuro
+                      ? const Color(0xFFA9B1BF)
+                      : const Color(0xFF6B7280),
+                  fontSize: 14,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(width: 12),
+
+        _buildProfileMenu(oscuro),
+      ],
+    );
+  }
+
+  // =========================================================
+  // MENÚ PERFIL
+  // =========================================================
+
+  Widget _buildProfileMenu(bool oscuro) {
+    return AppPressable(
+      scale: 0.92,
+      child: PopupMenuButton<_ProfileAction>(
+        tooltip: '',
+        onOpened: _feedbackSuave,
+        color: oscuro ? const Color(0xFF191F29) : Colors.white,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.black26,
+        elevation: 12,
+        offset: const Offset(0, 8),
+        position: PopupMenuPosition.under,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(17),
+          side: BorderSide(
+            color: oscuro ? const Color(0xFF2B323E) : const Color(0xFFE7EAF0),
+          ),
+        ),
+        onSelected: (_ProfileAction action) {
+          switch (action) {
+            case _ProfileAction.perfil:
+              _abrirPerfil();
+              break;
+
+            case _ProfileAction.asignaturas:
+              _abrirAsignaturas();
+              break;
+
+            case _ProfileAction.tareas:
+              _abrirTareas();
+              break;
+
+            case _ProfileAction.ajustes:
+              _abrirAjustes();
+
+            case _ProfileAction.logout:
+              _cerrarSesion();
+          }
+        },
+        itemBuilder: (context) {
+          return [
+            _profileMenuItem(
+              action: _ProfileAction.perfil,
+              icon: Icons.person_outline,
+              label: _espanol ? 'Perfil' : 'Profile',
+              oscuro: oscuro,
+            ),
+
+            _profileMenuItem(
+              action: _ProfileAction.asignaturas,
+              icon: Icons.menu_book_outlined,
+              label: _espanol ? 'Asignaturas' : 'Subjects',
+              oscuro: oscuro,
+            ),
+
+            _profileMenuItem(
+              action: _ProfileAction.tareas,
+              icon: Icons.checklist_rounded,
+              label: _espanol ? 'Tareas' : 'Tasks',
+              oscuro: oscuro,
+            ),
+
+            _profileMenuItem(
+              action: _ProfileAction.ajustes,
+              icon: Icons.settings_outlined,
+              label: _espanol ? 'Ajustes' : 'Settings',
+              oscuro: oscuro,
+            ),
+
+            const PopupMenuDivider(),
+
+            PopupMenuItem<_ProfileAction>(
+              value: _ProfileAction.logout,
+              height: 49,
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.logout_outlined,
+                    size: 20,
+                    color: Color(0xFFDC2626),
+                  ),
+
+                  const SizedBox(width: 13),
+
+                  Text(
+                    _cerrandoSesion
+                        ? (_espanol ? 'Cerrando...' : 'Signing out...')
+                        : (_espanol ? 'Cerrar sesión' : 'Sign out'),
+                    style: const TextStyle(
+                      color: Color(0xFFDC2626),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ];
+        },
+        child: Container(
+          width: 48,
+          height: 48,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: _primaryColor,
+            borderRadius: BorderRadius.circular(15),
+            boxShadow: oscuro
+                ? const []
+                : const [
+                    BoxShadow(
+                      color: Color(0x385B5FEF),
+                      blurRadius: 18,
+                      offset: Offset(0, 8),
+                    ),
+                  ],
+          ),
+          child: Text(
+            _inicialesUsuario,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompactProfileButton(bool oscuro) {
+    return AppPressable(
+      scale: 0.92,
+      child: PopupMenuButton<_ProfileAction>(
+        tooltip: '',
+        onOpened: _feedbackSuave,
+        color: oscuro ? const Color(0xFF1A1F29) : Colors.white,
+        surfaceTintColor: Colors.transparent,
+        elevation: 12,
+        offset: const Offset(0, 7),
+        position: PopupMenuPosition.under,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(17),
+          side: BorderSide(
+            color: oscuro ? const Color(0xFF313946) : const Color(0xFFE7EAF0),
+          ),
+        ),
+        onSelected: (_ProfileAction action) {
+          switch (action) {
+            case _ProfileAction.perfil:
+              _abrirPerfil();
+              break;
+
+            case _ProfileAction.asignaturas:
+              _abrirAsignaturas();
+              break;
+
+            case _ProfileAction.tareas:
+              _abrirTareas();
+              break;
+
+            case _ProfileAction.ajustes:
+              _abrirAjustes();
+              break;
+
+            case _ProfileAction.logout:
+              _cerrarSesion();
+              break;
+          }
+        },
+        itemBuilder: (context) {
+          return [
+            _profileMenuItem(
+              action: _ProfileAction.perfil,
+              icon: Icons.person_outline,
+              label: _espanol ? 'Perfil' : 'Profile',
+              oscuro: oscuro,
+            ),
+
+            _profileMenuItem(
+              action: _ProfileAction.asignaturas,
+              icon: Icons.menu_book_outlined,
+              label: _espanol ? 'Asignaturas' : 'Subjects',
+              oscuro: oscuro,
+            ),
+
+            _profileMenuItem(
+              action: _ProfileAction.tareas,
+              icon: Icons.checklist_rounded,
+              label: _espanol ? 'Tareas' : 'Tasks',
+              oscuro: oscuro,
+            ),
+
+            _profileMenuItem(
+              action: _ProfileAction.ajustes,
+              icon: Icons.settings_outlined,
+              label: _espanol ? 'Ajustes' : 'Settings',
+              oscuro: oscuro,
+            ),
+
+            const PopupMenuDivider(),
+
+            PopupMenuItem<_ProfileAction>(
+              value: _ProfileAction.logout,
+              height: 49,
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.logout_outlined,
+                    size: 20,
+                    color: Color(0xFFFF6B6B),
+                  ),
+
+                  const SizedBox(width: 13),
+
+                  Text(
+                    _espanol ? 'Cerrar sesión' : 'Sign out',
+                    style: const TextStyle(
+                      color: Color(0xFFFF6B6B),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ];
+        },
+        child: Container(
+          width: 38,
+          height: 38,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: _primaryColor,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            _inicialesUsuario,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  PopupMenuItem<_ProfileAction> _profileMenuItem({
+    required _ProfileAction action,
+    required IconData icon,
+    required String label,
+    required bool oscuro,
+  }) {
+    return PopupMenuItem<_ProfileAction>(
+      value: action,
+      height: 49,
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: _primaryColor),
+
+          const SizedBox(width: 13),
+
+          Text(
+            label,
+            style: TextStyle(
+              color: oscuro ? const Color(0xFFEDF1F7) : const Color(0xFF374151),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // =========================================================
+  // CARGA
+  // =========================================================
+
+  Widget _buildLoading(bool oscuro) {
+    return SizedBox(
+      height: 330,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(
+              width: 34,
+              height: 34,
+              child: CircularProgressIndicator(
+                strokeWidth: 3,
+                color: _primaryColor,
+              ),
+            ),
+
+            const SizedBox(height: 14),
+
+            Text(
+              _espanol ? 'Cargando tu espacio...' : 'Loading your space...',
+              style: TextStyle(
+                color: oscuro
+                    ? const Color(0xFFA9B1BF)
+                    : const Color(0xFF6B7280),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContentLoading(bool oscuro) {
+    return _buildSimpleCard(
+      oscuro: oscuro,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 42),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(
+                width: 30,
+                height: 30,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.7,
+                  color: _primaryColor,
+                ),
+              ),
+
+              const SizedBox(height: 14),
+
+              Text(
+                _espanol
+                    ? 'Cargando contenido académico...'
+                    : 'Loading academic content...',
+                style: TextStyle(
+                  color: oscuro
+                      ? const Color(0xFFA9B1BF)
+                      : const Color(0xFF6B7280),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // =========================================================
+  // ERRORES
+  // =========================================================
+
+  Widget _buildProfileError(bool oscuro) {
+    return _buildErrorCard(
+      titulo: _espanol
+          ? 'No pudimos cargar tu perfil'
+          : 'We could not load your profile',
+      descripcion: _espanol
+          ? 'Intenta actualizar la pantalla para volver a cargar tus datos.'
+          : 'Refresh the screen to try loading your data again.',
+    );
+  }
+
+  Widget _buildContentError(bool oscuro) {
+    return _buildErrorCard(
+      titulo: _espanol
+          ? 'No pudimos cargar tus asignaturas'
+          : 'We could not load your subjects',
+      descripcion: _espanol
+          ? 'Desliza hacia abajo para intentarlo nuevamente.'
+          : 'Pull down to try again.',
+    );
+  }
+
+  Widget _buildErrorCard({
+    required String titulo,
+    required String descripcion,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFF321D22),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFF5F2B31)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.error_outline_rounded,
+            color: Color(0xFFFCA5A5),
+            size: 27,
+          ),
+
+          const SizedBox(width: 14),
+
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  titulo,
+                  style: const TextStyle(
+                    color: Color(0xFFFCA5A5),
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+
+                const SizedBox(height: 5),
+
+                Text(
+                  descripcion,
+                  style: const TextStyle(
+                    color: Color(0xFFFCA5A5),
+                    fontSize: 14,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // =========================================================
+  // PERFIL INCOMPLETO
+  // =========================================================
+
+  Widget _buildWelcomeCard(bool oscuro) {
+    return _buildSimpleCard(
+      oscuro: oscuro,
+      borderColor: oscuro ? const Color(0xFF363964) : const Color(0xFFDFE2FF),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: oscuro
+                      ? const Color(0xFF252747)
+                      : const Color(0xFFEEF0FF),
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: const Icon(
+                  Icons.person_add_alt_1_outlined,
+                  color: _primaryColor,
+                ),
+              ),
+
+              const SizedBox(width: 14),
+
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _espanol ? 'PRIMEROS PASOS' : 'GET STARTED',
+                      style: const TextStyle(
+                        color: _primaryColor,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1,
+                      ),
+                    ),
+
+                    const SizedBox(height: 6),
+
+                    Text(
+                      _espanol ? 'Completa tu perfil' : 'Complete your profile',
+                      style: TextStyle(
+                        color: oscuro
+                            ? const Color(0xFFF8FAFC)
+                            : const Color(0xFF111827),
+                        fontSize: 21,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+
+                    const SizedBox(height: 6),
+
+                    Text(
+                      _espanol
+                          ? 'Cuéntanos un poco sobre tus estudios para personalizar mejor EduFlow AI.'
+                          : 'Tell us a little about your studies so EduFlow AI can personalize your experience.',
+                      style: TextStyle(
+                        color: oscuro
+                            ? const Color(0xFFA9B1BF)
+                            : const Color(0xFF6B7280),
+                        height: 1.45,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 18),
+
+          SizedBox(
+            height: 48,
+            child: ElevatedButton(
+              onPressed: () {
+                _abrirPerfil(completar: true);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _primaryColor,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              child: Text(
+                _espanol ? 'Completar perfil' : 'Complete profile',
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // =========================================================
+  // ESTADO VACÍO
+  // =========================================================
+  Widget _buildSubjectsSetupCard(bool oscuro) {
+    return AppReveal(
+      child: _buildSimpleCard(
+        oscuro: oscuro,
+        radius: 22,
+        borderColor: oscuro ? const Color(0xFF363964) : const Color(0xFFDFE2FF),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 22),
+          child: Column(
+            children: [
+              Container(
+                width: 70,
+                height: 70,
+                decoration: BoxDecoration(
+                  color: oscuro
+                      ? const Color(0xFF252747)
+                      : const Color(0xFFEEF0FF),
+                  borderRadius: BorderRadius.circular(22),
+                ),
+                child: const Icon(
+                  Icons.menu_book_outlined,
+                  color: _primaryColor,
+                  size: 34,
+                ),
+              ),
+
+              const SizedBox(height: 19),
+
+              Text(
+                _espanol ? 'SIGUIENTE PASO' : 'NEXT STEP',
+                style: const TextStyle(
+                  color: _primaryColor,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1,
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              Text(
+                _espanol ? 'Agrega tus asignaturas' : 'Add your subjects',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: oscuro
+                      ? const Color(0xFFF8FAFC)
+                      : const Color(0xFF111827),
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+
+              const SizedBox(height: 8),
+
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Text(
+                  _descripcionAgregarAsignaturas,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: oscuro
+                        ? const Color(0xFFA9B1BF)
+                        : const Color(0xFF6B7280),
+                    height: 1.5,
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 25),
+
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton.icon(
+                  onPressed: _abrirAsignaturas,
+                  icon: const Icon(Icons.add_rounded, size: 21),
+                  label: Text(
+                    _espanol ? 'Agregar asignaturas' : 'Add subjects',
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _primaryColor,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    textStyle: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildScheduleSetupCard(bool oscuro) {
+    return AppReveal(
+      child: _buildSimpleCard(
+        oscuro: oscuro,
+        radius: 22,
+        borderColor: oscuro ? const Color(0xFF363964) : const Color(0xFFDFE2FF),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 22),
+          child: Column(
+            children: [
+              Container(
+                width: 70,
+                height: 70,
+                decoration: BoxDecoration(
+                  color: oscuro
+                      ? const Color(0xFF252747)
+                      : const Color(0xFFEEF0FF),
+                  borderRadius: BorderRadius.circular(22),
+                ),
+                child: const Icon(
+                  Icons.calendar_month_outlined,
+                  color: _primaryColor,
+                  size: 34,
+                ),
+              ),
+
+              const SizedBox(height: 19),
+
+              Text(
+                _espanol ? 'SIGUIENTE PASO' : 'NEXT STEP',
+                style: const TextStyle(
+                  color: _primaryColor,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1,
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              Text(
+                _espanol ? 'Configura tu horario' : 'Set up your schedule',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: oscuro
+                      ? const Color(0xFFF8FAFC)
+                      : const Color(0xFF111827),
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+
+              const SizedBox(height: 8),
+
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Text(
+                  _descripcionConfigurarHorario,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: oscuro
+                        ? const Color(0xFFA9B1BF)
+                        : const Color(0xFF6B7280),
+                    height: 1.5,
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 25),
+
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton.icon(
+                  onPressed: _abrirHorario,
+                  icon: const Icon(Icons.calendar_month_outlined, size: 21),
+                  label: Text(
+                    _espanol ? 'Configurar horario' : 'Set up schedule',
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _primaryColor,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    textStyle: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // =========================================================
+  // RESUMEN
+  // =========================================================
+
+  Widget _buildSummarySection(bool oscuro, double ancho) {
+    final _ClaseDashboard? proxima = _proximaClase;
+
+    final List<Widget> tarjetas = [
+      AppReveal(
+        child: _buildSummaryCard(
+          oscuro: oscuro,
+          icon: Icons.menu_book_outlined,
+          iconColor: const Color(0xFF2563EB),
+          label: _espanol ? 'ASIGNATURAS' : 'SUBJECTS',
+          value: '$_totalAsignaturas',
+          description: _espanol
+              ? 'Registradas actualmente'
+              : 'Currently registered',
+        ),
+      ),
+
+      AppReveal(
+        delay: const Duration(milliseconds: 50),
+        child: _buildSummaryCard(
+          oscuro: oscuro,
+          icon: Icons.access_time_rounded,
+          iconColor: const Color(0xFF7C3AED),
+          label: _espanol ? 'CLASES HOY' : 'CLASSES TODAY',
+          value: '$_totalClasesHoy',
+          description: _totalClasesHoy == 0
+              ? (_espanol ? 'Sin clases hoy' : 'No classes today')
+              : _totalClasesHoy == 1
+              ? (_espanol ? 'clase programada' : 'scheduled class')
+              : (_espanol ? 'clases programadas' : 'scheduled classes'),
+        ),
+      ),
+
+      AppReveal(
+        delay: const Duration(milliseconds: 100),
+        child: _buildSummaryCard(
+          oscuro: oscuro,
+          icon: Icons.alarm_outlined,
+          iconColor: const Color(0xFF059669),
+          label: _espanol ? 'PRÓXIMA CLASE' : 'NEXT CLASS',
+          value: proxima == null ? '—' : _mostrarHora(proxima.horaInicio),
+          description:
+              proxima?.nombre ??
+              (_espanol
+                  ? 'Sin clases pendientes hoy'
+                  : 'No remaining classes today'),
+        ),
+      ),
+    ];
+
+    if (ancho > 960) {
+      return Row(
+        children: [
+          Expanded(child: tarjetas[0]),
+          const SizedBox(width: 18),
+          Expanded(child: tarjetas[1]),
+          const SizedBox(width: 18),
+          Expanded(child: tarjetas[2]),
+        ],
+      );
+    }
+
+    return Column(
+      children: [
+        tarjetas[0],
+        const SizedBox(height: 13),
+        tarjetas[1],
+        const SizedBox(height: 13),
+        tarjetas[2],
+      ],
+    );
+  }
+
+  Widget _buildSummaryCard({
+    required bool oscuro,
+    required IconData icon,
+    required Color iconColor,
+    required String label,
+    required String value,
+    required String description,
+  }) {
+    return _buildSimpleCard(
+      oscuro: oscuro,
+      radius: 18,
+      padding: 18,
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: iconColor.withValues(alpha: oscuro ? 0.16 : 0.10),
+              borderRadius: BorderRadius.circular(15),
+            ),
+            child: Icon(icon, color: iconColor, size: 23),
+          ),
+
+          const SizedBox(width: 14),
+
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: oscuro
+                        ? const Color(0xFF8993A2)
+                        : const Color(0xFF6B7280),
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.6,
+                  ),
+                ),
+
+                const SizedBox(height: 6),
+
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 280),
+                  switchInCurve: const Cubic(0.22, 1, 0.36, 1),
+                  switchOutCurve: Curves.easeOut,
+                  transitionBuilder: (child, animation) {
+                    return FadeTransition(
+                      opacity: animation,
+                      child: ScaleTransition(
+                        scale: Tween<double>(
+                          begin: 0.82,
+                          end: 1,
+                        ).animate(animation),
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: Text(
+                    value,
+                    key: ValueKey(value),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: oscuro
+                          ? const Color(0xFFF8FAFC)
+                          : const Color(0xFF111827),
+                      fontSize: 25,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 2),
+
+                Text(
+                  description,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: oscuro
+                        ? const Color(0xFFA9B1BF)
+                        : const Color(0xFF6B7280),
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // =========================================================
+  // PANELES PRINCIPALES
+  // =========================================================
+
+  Widget _buildContentSection(bool oscuro, double ancho) {
+    final Widget clases = AppReveal(
+      delay: const Duration(milliseconds: 180),
+      child: _buildClassesPanel(oscuro),
+    );
+
+    final Widget asignaturas = AppReveal(
+      delay: const Duration(milliseconds: 230),
+      child: _buildSubjectsPanel(oscuro),
+    );
+
+    return Column(children: [clases, const SizedBox(height: 18), asignaturas]);
+  }
+
+  Widget _buildClassesPanel(bool oscuro) {
+    return _buildSimpleCard(
+      oscuro: oscuro,
+      radius: 20,
+      padding: 18,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildPanelHeader(
+            oscuro: oscuro,
+            label: _espanol ? 'HOY' : 'TODAY',
+            title: _espanol ? 'Clases de hoy' : 'Today\'s classes',
+            action: _espanol ? 'Ver horario' : 'View schedule',
+            onPressed: _abrirHorario,
+          ),
+
+          const SizedBox(height: 8),
+
+          if (_clasesHoy.isEmpty)
+            _buildNoClasses(oscuro)
+          else
+            ..._clasesHoy.map((clase) => _buildClassItem(clase, oscuro)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildClassItem(_ClaseDashboard clase, bool oscuro) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 15),
+      decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(
+            color: oscuro ? const Color(0xFF303844) : const Color(0xFFEDF0F5),
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 76,
+            height: 56,
+            decoration: BoxDecoration(
+              color: oscuro ? const Color(0xFF252747) : const Color(0xFFEEF0FF),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  _mostrarHora(clase.horaInicio),
+                  style: const TextStyle(
+                    color: _primaryColor,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+
+                const SizedBox(height: 3),
+
+                Text(
+                  _mostrarHora(clase.horaFin),
+                  style: const TextStyle(
+                    color: _primaryColor,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(width: 12),
+
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  clase.nombre,
+                  style: TextStyle(
+                    color: oscuro
+                        ? const Color(0xFFF8FAFC)
+                        : const Color(0xFF1F2937),
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+
+                const SizedBox(height: 4),
+
+                Text(
+                  '${clase.sala} · ${clase.profesor}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: oscuro
+                        ? const Color(0xFFA9B1BF)
+                        : const Color(0xFF6B7280),
+                    fontSize: 12.5,
+                    height: 1.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNoClasses(bool oscuro) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 23),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.check_circle_outline_rounded,
+            color: _primaryColor,
+            size: 30,
+          ),
+
+          const SizedBox(width: 14),
+
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _espanol ? 'Sin clases por hoy' : 'No classes today',
+                  style: TextStyle(
+                    color: oscuro
+                        ? const Color(0xFFF8FAFC)
+                        : const Color(0xFF1F2937),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+
+                const SizedBox(height: 4),
+
+                Text(
+                  _espanol
+                      ? 'No tienes bloques programados para hoy.'
+                      : 'You have no scheduled blocks today.',
+                  style: TextStyle(
+                    color: oscuro
+                        ? const Color(0xFFA9B1BF)
+                        : const Color(0xFF6B7280),
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSubjectsPanel(bool oscuro) {
+    final List<Asignatura> primeras = _asignaturas.take(4).toList();
+
+    return _buildSimpleCard(
+      oscuro: oscuro,
+      radius: 20,
+      padding: 18,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildPanelHeader(
+            oscuro: oscuro,
+            label: _espanol ? 'ACADÉMICO' : 'ACADEMIC',
+            title: _espanol ? 'Mis asignaturas' : 'My subjects',
+            action: _espanol ? 'Ver todas' : 'View all',
+            onPressed: _abrirAsignaturas,
+          ),
+
+          const SizedBox(height: 8),
+
+          ...primeras.map(
+            (asignatura) => _buildSubjectItem(asignatura, oscuro),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSubjectItem(Asignatura asignatura, bool oscuro) {
+    final String codigo = asignatura.sigla?.trim().isNotEmpty == true
+        ? asignatura.sigla!.trim()
+        : (_espanol ? 'ASIG.' : 'SUBJ.');
+
+    final String profesor = asignatura.profesor?.trim().isNotEmpty == true
+        ? asignatura.profesor!.trim()
+        : (_espanol ? 'Sin profesor' : 'No teacher');
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 15),
+      decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(
+            color: oscuro ? const Color(0xFF303844) : const Color(0xFFEDF0F5),
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 74,
+            child: Text(
+              codigo,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: _primaryColor,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+
+          const SizedBox(width: 10),
+
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  asignatura.nombre,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: oscuro
+                        ? const Color(0xFFF8FAFC)
+                        : const Color(0xFF1F2937),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+
+                const SizedBox(height: 3),
+
+                Text(
+                  profesor,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: oscuro
+                        ? const Color(0xFFA9B1BF)
+                        : const Color(0xFF6B7280),
+                    fontSize: 12.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPanelHeader({
+    required bool oscuro,
+    required String label,
+    required String title,
+    required String action,
+    required VoidCallback onPressed,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  color: oscuro
+                      ? const Color(0xFF8993A2)
+                      : const Color(0xFF6B7280),
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.8,
+                ),
+              ),
+
+              const SizedBox(height: 4),
+
+              Text(
+                title,
+                style: TextStyle(
+                  color: oscuro
+                      ? const Color(0xFFF8FAFC)
+                      : const Color(0xFF111827),
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        AppPressable(
+          child: TextButton(
+            onPressed: onPressed,
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 4),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: Text(
+              action,
+              style: const TextStyle(
+                color: _primaryColor,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // =========================================================
+  // TARJETA BASE
+  // =========================================================
+
+  Widget _buildSimpleCard({
+    required bool oscuro,
+    required Widget child,
+    double radius = 20,
+    double padding = 20,
+    Color? borderColor,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(padding),
+      decoration: BoxDecoration(
+        color: oscuro ? const Color(0xFF191F29) : Colors.white,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(
+          color:
+              borderColor ??
+              (oscuro ? const Color(0xFF2B323E) : const Color(0xFFE7EAF0)),
+        ),
+        boxShadow: oscuro
+            ? const []
+            : const [
+                BoxShadow(
+                  color: Color(0x0E0F172A),
+                  blurRadius: 24,
+                  offset: Offset(0, 8),
+                ),
+              ],
+      ),
+      child: child,
+    );
+  }
+}
+
+// ===========================================================
+// CLASE DASHBOARD
+// ===========================================================
+
+class _ClaseDashboard {
+  const _ClaseDashboard({
+    required this.asignaturaId,
+    required this.nombre,
+    required this.sala,
+    required this.profesor,
+    required this.horaInicio,
+    required this.horaFin,
+  });
+
+  final String asignaturaId;
+
+  final String nombre;
+
+  final String sala;
+
+  final String profesor;
+
+  final String horaInicio;
+
+  final String horaFin;
+}
+
+// ===========================================================
+// ACCIONES MENÚ PERFIL
+// ===========================================================
+
+enum _ProfileAction { perfil, asignaturas, tareas, ajustes, logout }

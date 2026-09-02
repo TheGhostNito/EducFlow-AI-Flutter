@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "621346416674",
+    "project_id": "educflow-ai",
+    "storage_bucket": "educflow-ai.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:621346416674:android:ebdfb4dcdf7d41c8dd027b",
+        "android_client_info": {
+          "package_name": "com.martinrozas.eduflowai"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDuVcCwSPAps3aqcJq7B2X3mxxGr81T-b0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

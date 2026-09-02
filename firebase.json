@@ -1,0 +1,26 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "educflow-ai",
+          "appId": "1:621346416674:android:ebdfb4dcdf7d41c8dd027b",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "educflow-ai",
+          "configurations": {
+            "android": "1:621346416674:android:ebdfb4dcdf7d41c8dd027b",
+            "ios": "1:621346416674:ios:86461168d1bb0caddd027b",
+            "web": "1:621346416674:web:9bb370b60d4c7a34dd027b"
+          }
+        }
+      }
+    }
+  },
+  "firestore": {
+    "rules": "firestore.rules"
+  }
+}
