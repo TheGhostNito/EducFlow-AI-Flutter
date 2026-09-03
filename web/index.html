@@ -18,21 +18,45 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="EducFlow AI: organiza tu vida académica.">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
+  <meta id="flutterweb-theme" name="theme-color" content="#0D0D10">
+  <meta name="color-scheme" content="light dark">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="eduflow_ai">
+  <meta name="apple-mobile-web-app-title" content="EducFlow AI">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>eduflow_ai</title>
+  <title>EducFlow AI</title>
   <link rel="manifest" href="manifest.json">
+  <style>
+    :root { --educflow-background: #F5F7FB; color-scheme: light; }
+    html, body {
+      margin: 0;
+      background-color: var(--educflow-background);
+    }
+    /* Solo mide env(); el espacio se aplica una vez, en MediaQuery de Flutter. */
+    #educflow-safe-area {
+      position: fixed;
+      visibility: hidden;
+      pointer-events: none;
+      width: 0;
+      height: 0;
+      padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+               env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+    }
+  </style>
+  <!-- Aplica el último tema visual antes de cargar Flutter. -->
+  <script src="pwa_environment.js"></script>
 </head>
 <body>
+  <div id="educflow-safe-area" aria-hidden="true"></div>
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader

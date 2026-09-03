@@ -30,8 +30,8 @@ class NotificationService {
 
   /// Payload de la última notificación del sistema pulsada.
   ///
-  /// AuthGate escucha este notifier para poder esperar a que
-  /// exista una sesión válida antes de navegar.
+  /// MainNavigation escucha este notifier al montarse tras la autenticación,
+  /// para seleccionar Notificaciones sin apilar secciones principales.
   final ValueNotifier<String?> notificationPayload = ValueNotifier<String?>(
     null,
   );

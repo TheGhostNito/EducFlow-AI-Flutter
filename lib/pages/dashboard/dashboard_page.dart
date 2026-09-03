@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/navigation/main_navigation.dart';
 import '../../core/auth/auth_service.dart';
 import '../../models/asignatura.dart';
 import '../../models/perfil_usuario.dart';
@@ -9,17 +10,14 @@ import '../../services/perfil_service.dart';
 import '../../services/translation_service.dart';
 import '../login/login_page.dart';
 import '../../widgets/main_bottom_nav.dart';
+import '../../widgets/main_section_scroll.dart';
 import '../../widgets/app_reveal.dart';
 import '../../widgets/app_scroll_header.dart';
 import '../profile/profile_page.dart';
 import '../settings/settings_page.dart';
 import '../subjects/subjects_page.dart';
-import '../calendar/calendar_page.dart';
-import '../schedule/schedule_page.dart';
 import '../../services/time_format_service.dart';
 import '../tasks/tasks_page.dart';
-import '../notifications/notifications_page.dart';
-import '../ai/ai_chat_page.dart';
 
 import 'package:flutter/services.dart';
 
@@ -66,6 +64,11 @@ class _DashboardPageState extends State<DashboardPage> {
   int _versionAsignaturasCargada = -1;
 
   static const Color _primaryColor = Color(0xFF5B5FEF);
+
+  // Ancho común para las traducciones de ambos menús del avatar.
+  static const BoxConstraints _profileMenuConstraints = BoxConstraints.tightFor(
+    width: 200,
+  );
 
   bool get _espanol => _translationService.isSpanish;
 
@@ -605,50 +608,30 @@ class _DashboardPageState extends State<DashboardPage> {
         .push(MaterialPageRoute(builder: (_) => const TasksPage()));
   }
 
-  Future<void> _abrirHorario() async {
-    await Navigator.of(context)
-        .push(MaterialPageRoute(builder: (_) => const SchedulePage()));
-
-    if (!mounted) {
-      return;
-    }
-
-    await _cargarContenido(forzar: true, silencioso: true);
+  void _abrirHorario() {
+    MainNavigation.goTo(context, SeccionPrincipal.horario);
   }
 
-  Future<void> _abrirCalendario() async {
-    await Navigator.of(context)
-        .push(MaterialPageRoute(builder: (_) => const CalendarPage()));
-
-    if (!mounted) {
-      return;
-    }
-
-    await _cargarContenido(forzar: true, silencioso: true);
+  void _volverArriba() {
+    scrollMainSectionToTop(context, _scrollController);
   }
 
-  Future<void> _abrirNotificaciones() async {
+  void _abrirCalendario() {
+    MainNavigation.goTo(context, SeccionPrincipal.calendario);
+  }
+
+  void _abrirNotificaciones() {
     HapticFeedback.selectionClick();
-
-    await Navigator.of(context)
-        .push(MaterialPageRoute(builder: (_) => const NotificationsPage()));
-
-    if (!mounted) {
-      return;
-    }
-
-    await _cargarContenido(forzar: true, silencioso: true);
+    MainNavigation.goTo(context, SeccionPrincipal.notificaciones);
   }
 
   // =========================================================
   // EDUCFLOW AI
   // =========================================================
 
-  Future<void> _abrirIA() async {
+  void _abrirIA() {
     HapticFeedback.selectionClick();
-
-    await Navigator.of(context)
-        .push(MaterialPageRoute(builder: (_) => const AiChatPage()));
+    MainNavigation.goTo(context, SeccionPrincipal.ia);
   }
 
   // =========================================================
@@ -748,7 +731,7 @@ class _DashboardPageState extends State<DashboardPage> {
           MainBottomNav(
             currentIndex: 0,
 
-            onHome: () {},
+            onHome: _volverArriba,
 
             onSchedule: _abrirHorario,
 
@@ -837,6 +820,7 @@ class _DashboardPageState extends State<DashboardPage> {
     return AppPressable(
       scale: 0.92,
       child: PopupMenuButton<_ProfileAction>(
+        constraints: _profileMenuConstraints,
         tooltip: '',
         onOpened: _feedbackSuave,
         color: oscuro ? const Color(0xFF191F29) : Colors.white,
@@ -965,6 +949,7 @@ class _DashboardPageState extends State<DashboardPage> {
     return AppPressable(
       scale: 0.92,
       child: PopupMenuButton<_ProfileAction>(
+        constraints: _profileMenuConstraints,
         tooltip: '',
         onOpened: _feedbackSuave,
         color: oscuro ? const Color(0xFF1A1F29) : Colors.white,

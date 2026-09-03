@@ -1,11 +1,11 @@
 {
-    "name": "eduflow_ai",
-    "short_name": "eduflow_ai",
+    "name": "EducFlow AI",
+    "short_name": "EducFlow AI",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#F5F7FB",
+    "theme_color": "#F5F7FB",
+    "description": "EducFlow AI: organiza tu vida académica.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

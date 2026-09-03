@@ -6,7 +6,6 @@ import '../../services/translation_service.dart';
 import '../../widgets/auth_feedback.dart';
 import '../../widgets/language_selector.dart';
 import '../../widgets/theme_toggle_button.dart';
-import '../dashboard/dashboard_page.dart';
 import '../register/register_page.dart';
 
 class LoginPage extends StatefulWidget {
@@ -181,14 +180,9 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     try {
+      // AuthGate es el único propietario de la ruta principal y cambia a
+      // MainNavigation cuando Firebase publica la sesión autenticada.
       await _authService.iniciarSesion(correo: correo, contrasena: contrasena);
-
-      if (!mounted) {
-        return;
-      }
-
-      await Navigator.of(context)
-          .pushReplacement(MaterialPageRoute(builder: (_) => DashboardPage()));
     } on FirebaseAuthException catch (error) {
       if (!mounted) {
         return;

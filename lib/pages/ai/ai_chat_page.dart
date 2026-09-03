@@ -1,7 +1,13 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:ionicons/ionicons.dart';
+
+import '../../core/navigation/main_navigation.dart';
+import '../../widgets/main_bottom_nav.dart';
+import '../../widgets/main_section_scroll.dart';
 
 import '../../models/ai_conversation.dart';
 import '../../services/ai_chat_history_service.dart';
@@ -195,7 +201,24 @@ class _AiChatPageState extends State<AiChatPage> {
 
   void _back() {
     HapticFeedback.selectionClick();
-    Navigator.of(context).maybePop();
+    MainNavigation.goTo(context, SeccionPrincipal.inicio);
+  }
+
+  void _openSchedule() {
+    MainNavigation.goTo(context, SeccionPrincipal.horario);
+  }
+
+  void _openCalendar() {
+    MainNavigation.goTo(context, SeccionPrincipal.calendario);
+  }
+
+  void _openNotifications() {
+    MainNavigation.goTo(context, SeccionPrincipal.notificaciones);
+  }
+
+  void _scrollToTop() {
+    _focusNode.unfocus();
+    scrollMainSectionToTop(context, _scrollController);
   }
 
   Future<void> _openHistory() async {
@@ -505,32 +528,51 @@ class _AiChatPageState extends State<AiChatPage> {
   @override
   Widget build(BuildContext context) {
     final bool dark = Theme.of(context).brightness == Brightness.dark;
+    final bool keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
+    final double safeBottom = MediaQuery.paddingOf(context).bottom;
+    final double navigationSpace = 76 + math.max(0.0, 16 - safeBottom);
 
     return Scaffold(
       resizeToAvoidBottomInset: true,
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            _buildHeader(dark),
+      body: Stack(
+        children: [
+          Positioned.fill(
+            bottom: keyboardVisible ? 0 : navigationSpace,
+            child: SafeArea(
+              bottom: false,
+              child: Column(
+                children: [
+                  _buildHeader(dark),
 
-            Expanded(
-              child: _loadingConversation
-                  ? const Center(
-                      child: CircularProgressIndicator(
-                        color: _primaryColor,
-                        strokeWidth: 3,
-                      ),
-                    )
-                  : _messages.isEmpty
-                  ? _buildEmptyState(dark)
-                  : _buildConversation(dark),
+                  Expanded(
+                    child: _loadingConversation
+                        ? const Center(
+                            child: CircularProgressIndicator(
+                              color: _primaryColor,
+                              strokeWidth: 3,
+                            ),
+                          )
+                        : _messages.isEmpty
+                        ? _buildEmptyState(dark)
+                        : _buildConversation(dark),
+                  ),
+
+                  _buildComposer(dark),
+                ],
+              ),
             ),
-
-            _buildComposer(dark),
-          ],
-        ),
+          ),
+          if (!keyboardVisible)
+            MainBottomNav(
+              currentIndex: 2,
+              onHome: _back,
+              onSchedule: _openSchedule,
+              onAi: _scrollToTop,
+              onCalendar: _openCalendar,
+              onNotifications: _openNotifications,
+            ),
+        ],
       ),
     );
   }
@@ -717,6 +759,7 @@ class _AiChatPageState extends State<AiChatPage> {
         _focusNode.unfocus();
       },
       child: SingleChildScrollView(
+        controller: _scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(18, 28, 18, 28),
         child: Center(

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:ionicons/ionicons.dart';
 
+import '../../core/navigation/main_navigation.dart';
+
 import '../../core/auth/auth_service.dart';
 import '../../models/asignatura.dart';
 import '../../models/perfil_usuario.dart';
@@ -12,14 +14,12 @@ import '../../widgets/app_pressable.dart';
 import '../../widgets/app_reveal.dart';
 import '../../widgets/app_scroll_header.dart';
 import '../../widgets/main_bottom_nav.dart';
+import '../../widgets/main_section_scroll.dart';
 import '../subjects/subject_detail_page.dart';
 import '../subjects/subjects_page.dart';
 import 'widgets/schedule_class_edit_sheet.dart';
 import '../../services/horario_conflict_service.dart';
 import '../../services/time_format_service.dart';
-import '../calendar/calendar_page.dart';
-import '../ai/ai_chat_page.dart';
-import '../notifications/notifications_page.dart';
 import '../../widgets/app_status_snackbar.dart';
 
 class SchedulePage extends StatefulWidget {
@@ -551,34 +551,26 @@ class _SchedulePageState extends State<SchedulePage> {
 
   void _volverInicio() {
     HapticFeedback.selectionClick();
-
-    Navigator.of(context).maybePop();
+    MainNavigation.goTo(context, SeccionPrincipal.inicio);
   }
 
-  Future<void> _abrirIA() async {
-    HapticFeedback.selectionClick();
-
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => const AiChatPage(),
-      ),
-    );
+  void _volverArriba() {
+    scrollMainSectionToTop(context, _scrollController);
   }
 
-  Future<void> _abrirCalendario() async {
+  void _abrirIA() {
     HapticFeedback.selectionClick();
-
-    await Navigator.of(
-      context,
-    ).pushReplacement(MaterialPageRoute(builder: (_) => const CalendarPage()));
+    MainNavigation.goTo(context, SeccionPrincipal.ia);
   }
 
-  Future<void> _abrirNotificaciones() async {
+  void _abrirCalendario() {
     HapticFeedback.selectionClick();
+    MainNavigation.goTo(context, SeccionPrincipal.calendario);
+  }
 
-    await Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const NotificationsPage()),
-    );
+  void _abrirNotificaciones() {
+    HapticFeedback.selectionClick();
+    MainNavigation.goTo(context, SeccionPrincipal.notificaciones);
   }
 
   Future<void> _abrirAsignaturas() async {
@@ -1697,7 +1689,7 @@ class _SchedulePageState extends State<SchedulePage> {
 
             onHome: _volverInicio,
 
-            onSchedule: () {},
+            onSchedule: _volverArriba,
 
             onAi: _abrirIA,
 

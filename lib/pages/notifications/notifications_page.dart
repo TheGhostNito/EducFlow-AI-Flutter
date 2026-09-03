@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:ionicons/ionicons.dart';
 
+import '../../core/navigation/main_navigation.dart';
+
 import '../../models/asignatura.dart';
 import '../../models/evaluacion.dart';
 import '../../models/notificacion_app.dart';
@@ -18,8 +20,7 @@ import '../../widgets/app_reveal.dart';
 import '../../widgets/app_scroll_header.dart';
 import '../../widgets/app_status_snackbar.dart';
 import '../../widgets/main_bottom_nav.dart';
-import '../calendar/calendar_page.dart';
-import '../schedule/schedule_page.dart';
+import '../../widgets/main_section_scroll.dart';
 import '../../core/auth/auth_service.dart';
 import '../../models/perfil_usuario.dart';
 import '../../services/perfil_service.dart';
@@ -31,7 +32,6 @@ import '../calendar/widgets/evaluation_edit_sheet.dart';
 import '../calendar/widgets/calendar_class_detail_sheet.dart';
 import '../schedule/widgets/schedule_class_edit_sheet.dart';
 import '../subjects/subject_detail_page.dart';
-import '../ai/ai_chat_page.dart';
 
 class NotificationsPage extends StatefulWidget {
   const NotificationsPage({super.key, this.initialPayload});
@@ -1756,34 +1756,26 @@ class _NotificationsPageState extends State<NotificationsPage> {
 
   void _volverInicio() {
     HapticFeedback.selectionClick();
-
-    Navigator.of(context).popUntil((route) => route.isFirst);
+    MainNavigation.goTo(context, SeccionPrincipal.inicio);
   }
 
-  Future<void> _abrirIA() async {
-    HapticFeedback.selectionClick();
-
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => const AiChatPage(),
-      ),
-    );
+  void _volverArriba() {
+    scrollMainSectionToTop(context, _scrollController);
   }
 
-  Future<void> _abrirHorario() async {
+  void _abrirIA() {
     HapticFeedback.selectionClick();
-
-    await Navigator.of(
-      context,
-    ).pushReplacement(MaterialPageRoute(builder: (_) => const SchedulePage()));
+    MainNavigation.goTo(context, SeccionPrincipal.ia);
   }
 
-  Future<void> _abrirCalendario() async {
+  void _abrirHorario() {
     HapticFeedback.selectionClick();
+    MainNavigation.goTo(context, SeccionPrincipal.horario);
+  }
 
-    await Navigator.of(
-      context,
-    ).pushReplacement(MaterialPageRoute(builder: (_) => const CalendarPage()));
+  void _abrirCalendario() {
+    HapticFeedback.selectionClick();
+    MainNavigation.goTo(context, SeccionPrincipal.calendario);
   }
 
   // =========================================================
@@ -1962,7 +1954,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
             onSchedule: _abrirHorario,
             onAi: _abrirIA,
             onCalendar: _abrirCalendario,
-            onNotifications: () {},
+            onNotifications: _volverArriba,
           ),
         ],
       ),

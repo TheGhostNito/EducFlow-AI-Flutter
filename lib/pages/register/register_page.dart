@@ -10,7 +10,6 @@ import '../../widgets/app_animated_visibility.dart';
 import '../../widgets/auth_feedback.dart';
 import '../../widgets/language_selector.dart';
 import '../../widgets/theme_toggle_button.dart';
-import '../dashboard/dashboard_page.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -320,8 +319,9 @@ class _RegisterPageState extends State<RegisterPage> {
         return;
       }
 
-      await Navigator.of(context)
-          .pushReplacement(MaterialPageRoute(builder: (_) => DashboardPage()));
+      // Registro sí es una ruta secundaria: se cierra para revelar la única
+      // raíz, cuyo AuthGate ya reacciona a la nueva sesión.
+      Navigator.of(context).popUntil((route) => route.isFirst);
     } on FirebaseAuthException catch (error) {
       if (!mounted) {
         return;

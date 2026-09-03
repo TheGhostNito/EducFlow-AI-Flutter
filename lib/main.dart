@@ -11,6 +11,7 @@ import 'services/notification_service.dart';
 import 'services/theme_service.dart';
 import 'services/time_format_service.dart';
 import 'services/translation_service.dart';
+import 'widgets/web_app_frame.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -52,7 +53,17 @@ class EducFlowApp extends StatelessWidget {
       builder: (context, _) {
         return MaterialApp(
           title: 'EducFlow AI',
+          // Flutter Web usa este color para su meta theme-color.
+          color: kIsWeb
+              ? (ThemeService.instance.isDarkMode
+                    ? const Color(0xFF0D0D10)
+                    : const Color(0xFFF5F7FB))
+              : null,
           debugShowCheckedModeBanner: false,
+          builder: (context, child) => WebAppFrame(
+            dark: ThemeService.instance.isDarkMode,
+            child: child!,
+          ),
 
           locale: TranslationService.instance.isSpanish
               ? const Locale('es', 'CL')

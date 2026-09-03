@@ -20,7 +20,7 @@ class AppScrollHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final bool oscuro = Theme.of(context).brightness == Brightness.dark;
 
-    final double safeTop = MediaQuery.paddingOf(context).top;
+    final EdgeInsets safeArea = MediaQuery.paddingOf(context);
 
     // Algunas pantallas pequeñas no alcanzan suficiente scroll
     // para que el progreso calculado por la página llegue a 1.
@@ -49,7 +49,12 @@ class AppScrollHeader extends StatelessWidget {
             child: BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
               child: Container(
-                padding: EdgeInsets.fromLTRB(12, safeTop + 7, 12, 9),
+                padding: EdgeInsets.fromLTRB(
+                  12 + safeArea.left,
+                  safeArea.top + 7,
+                  12 + safeArea.right,
+                  9,
+                ),
                 decoration: BoxDecoration(
                   color: oscuro
                       ? const Color(0xEB18181C)

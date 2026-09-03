@@ -15,7 +15,7 @@ class FirebaseAuthTestHost {
   final List<List<Object?>> iniciosDeSesion = [];
   Future<void>? respuestaPendiente;
 
-  Future<void> initialize() async {
+  Future<void> initialize({String? initialUid}) async {
     _messenger.setMockMessageHandler(
       'dev.flutter.pigeon.firebase_core_platform_interface.FirebaseCoreHostApi.initializeCore',
       (_) async => _codec.encodeMessage([
@@ -30,7 +30,28 @@ class FirebaseAuthTestHost {
               ...List<Object?>.filled(10, null),
             ]),
             false,
-            <String, Object?>{},
+            <String, Object?>{
+              if (initialUid != null)
+                'plugins.flutter.io/firebase_auth': {
+                  'APP_CURRENT_USER': [
+                    [
+                      initialUid,
+                      'estudiante@example.test',
+                      'Martín',
+                      null,
+                      null,
+                      false,
+                      true,
+                      null,
+                      null,
+                      null,
+                      null,
+                      null,
+                    ],
+                    <Object?>[],
+                  ],
+                },
+            },
           ]),
         ],
       ]),
