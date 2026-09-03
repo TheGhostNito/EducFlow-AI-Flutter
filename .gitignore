@@ -49,3 +49,6 @@ app.*.map.json
 
 # Local release builds
 /releases/
+
+# Firebase local cache
+.firebase/

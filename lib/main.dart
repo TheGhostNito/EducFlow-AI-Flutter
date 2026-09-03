@@ -17,6 +17,11 @@ Future<void> main() async {
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await FirebaseAppCheck.instance.activate(
+    providerWeb: kDebugMode
+        ? WebDebugProvider()
+        : ReCaptchaEnterpriseProvider(
+            '6LdGGaYtAAAAAGORi9HkV80j_msD4ew0hj6GhSfy',
+          ),
     providerAndroid: kDebugMode
         ? const AndroidDebugProvider()
         : const AndroidReCaptchaProvider(
