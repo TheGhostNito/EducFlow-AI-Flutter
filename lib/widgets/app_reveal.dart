@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 class AppReveal extends StatefulWidget {
@@ -5,7 +7,7 @@ class AppReveal extends StatefulWidget {
     super.key,
     required this.child,
     this.delay = Duration.zero,
-    this.duration = const Duration(milliseconds: 420),
+    this.duration = const Duration(milliseconds: 300),
     this.offsetY = 12,
   });
 
@@ -27,7 +29,10 @@ class _AppRevealState extends State<AppReveal>
 
   late final Animation<double> _opacity;
 
-  late final Animation<Offset> _position;
+  late final Animation<double> _position;
+  late final CurvedAnimation _curve;
+  Timer? _delayTimer;
+  bool _started = false;
 
   @override
   void initState() {
@@ -35,35 +40,38 @@ class _AppRevealState extends State<AppReveal>
 
     _controller = AnimationController(vsync: this, duration: widget.duration);
 
-    final CurvedAnimation curve = CurvedAnimation(
+    _curve = CurvedAnimation(
       parent: _controller,
       curve: const Cubic(0.22, 1, 0.36, 1),
     );
 
-    _opacity = Tween<double>(begin: 0, end: 1).animate(curve);
+    _opacity = _curve;
 
-    _position = Tween<Offset>(
-      begin: Offset(0, widget.offsetY / 100),
-      end: Offset.zero,
-    ).animate(curve);
-
-    _iniciar();
+    // Distancia fija: una tarjeta alta no debe recorrer el 12% de su altura.
+    _position = Tween<double>(begin: widget.offsetY, end: 0).animate(_curve);
   }
 
-  Future<void> _iniciar() async {
-    if (widget.delay > Duration.zero) {
-      await Future<void>.delayed(widget.delay);
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _delayTimer?.cancel();
+      _controller.value = 1;
+      _started = true;
+    } else if (!_started) {
+      _started = true;
+      if (widget.delay == Duration.zero) {
+        _controller.forward();
+      } else {
+        _delayTimer = Timer(widget.delay, () => _controller.forward());
+      }
     }
-
-    if (!mounted) {
-      return;
-    }
-
-    await _controller.forward();
   }
 
   @override
   void dispose() {
+    _delayTimer?.cancel();
+    _curve.dispose();
     _controller.dispose();
 
     super.dispose();
@@ -73,7 +81,14 @@ class _AppRevealState extends State<AppReveal>
   Widget build(BuildContext context) {
     return FadeTransition(
       opacity: _opacity,
-      child: SlideTransition(position: _position, child: widget.child),
+      child: AnimatedBuilder(
+        animation: _position,
+        child: widget.child,
+        builder: (context, child) => Transform.translate(
+          offset: Offset(0, _position.value),
+          child: child,
+        ),
+      ),
     );
   }
 }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/auth/auth_service.dart';
 import '../../services/translation_service.dart';
+import '../../widgets/auth_feedback.dart';
 import '../../widgets/language_selector.dart';
 import '../../widgets/theme_toggle_button.dart';
 import '../dashboard/dashboard_page.dart';
@@ -645,6 +646,8 @@ class _LoginPageState extends State<LoginPage> {
               focusNode: _passwordFocusNode,
               enabled: !_actionInProgress,
               obscureText: !_mostrarContrasena,
+              autocorrect: false,
+              enableSuggestions: false,
               textInputAction: TextInputAction.done,
               autofillHints: const [AutofillHints.password],
               cursorColor: _primaryColor,
@@ -664,7 +667,8 @@ class _LoginPageState extends State<LoginPage> {
                 icon: Icons.lock_outline,
                 oscuro: oscuro,
                 validationColor: _colorValidacionContrasena(),
-                suffixIcon: IconButton(
+                suffixIcon: PasswordVisibilityButton(
+                  visible: _mostrarContrasena,
                   onPressed: _actionInProgress
                       ? null
                       : () {
@@ -672,14 +676,6 @@ class _LoginPageState extends State<LoginPage> {
                             _mostrarContrasena = !_mostrarContrasena;
                           });
                         },
-                  icon: Icon(
-                    _mostrarContrasena
-                        ? Icons.visibility_off_outlined
-                        : Icons.visibility_outlined,
-                    color: oscuro
-                        ? const Color(0xFFA9B1BF)
-                        : const Color(0xFF7B8492),
-                  ),
                 ),
               ),
             ),
@@ -690,51 +686,11 @@ class _LoginPageState extends State<LoginPage> {
           // ===================================================
           // ERROR
           // ===================================================
-          if (_errorMessage.isNotEmpty) ...[
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: oscuro
-                    ? const Color(0xFF321D22)
-                    : const Color(0xFFFEF2F2),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: oscuro
-                      ? const Color(0xFF5F2B31)
-                      : const Color(0xFFFECACA),
-                ),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(
-                    Icons.error_outline,
-                    color: oscuro
-                        ? const Color(0xFFFCA5A5)
-                        : const Color(0xFFB91C1C),
-                    size: 19,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      _errorMessage,
-                      style: TextStyle(
-                        color: oscuro
-                            ? const Color(0xFFFCA5A5)
-                            : const Color(0xFFB91C1C),
-                        fontSize: 13,
-                        height: 1.4,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 14),
-          ] else
-            const SizedBox(height: 8),
+          AuthStatusMessage(
+            message: _errorMessage,
+            padding: const EdgeInsets.only(bottom: 6),
+          ),
+          const SizedBox(height: 8),
 
           // ===================================================
           // BOTÓN INICIAR SESIÓN
@@ -755,85 +711,22 @@ class _LoginPageState extends State<LoginPage> {
                   borderRadius: BorderRadius.circular(14),
                 ),
               ),
-              child: _isLoading
-                  ? Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const SizedBox(
-                          width: 19,
-                          height: 19,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.2,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(width: 9),
-                        Text(
-                          _espanol ? 'Ingresando...' : 'Signing in...',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    )
-                  : Text(
-                      _espanol ? 'Iniciar sesión' : 'Sign in',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+              child: AuthButtonContent(
+                loading: _isLoading,
+                label: _espanol ? 'Iniciar sesión' : 'Sign in',
+                loadingLabel: _espanol ? 'Ingresando...' : 'Signing in...',
+              ),
             ),
           ),
 
           // ===================================================
           // MENSAJE DE ÉXITO
           // ===================================================
-          if (_successMessage.isNotEmpty) ...[
-            const SizedBox(height: 14),
-
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: oscuro
-                    ? const Color(0xFF17362D)
-                    : const Color(0xFFECFDF5),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: oscuro
-                      ? const Color(0xFF205D4B)
-                      : const Color(0xFFA7F3D0),
-                ),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(
-                    Icons.check_circle_outline,
-                    color: oscuro
-                        ? const Color(0xFF6EE7B7)
-                        : const Color(0xFF047857),
-                    size: 19,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      _successMessage,
-                      style: TextStyle(
-                        color: oscuro
-                            ? const Color(0xFF6EE7B7)
-                            : const Color(0xFF047857),
-                        fontSize: 13,
-                        height: 1.4,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+          AuthStatusMessage(
+            message: _successMessage,
+            success: true,
+            padding: const EdgeInsets.only(top: 14),
+          ),
 
           const SizedBox(height: 8),
 
@@ -844,41 +737,19 @@ class _LoginPageState extends State<LoginPage> {
             child: TextButton(
               onPressed: _actionInProgress ? null : _recuperarContrasena,
               style: TextButton.styleFrom(
+                foregroundColor: _primaryColor,
                 padding: EdgeInsets.zero,
                 minimumSize: Size.zero,
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
-              child: _isRecoveringPassword
-                  ? Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const SizedBox(
-                          width: 17,
-                          height: 17,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: _primaryColor,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          _espanol ? 'Enviando...' : 'Sending...',
-                          style: const TextStyle(
-                            color: _primaryColor,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    )
-                  : Text(
-                      _espanol
-                          ? '¿Olvidaste tu contraseña?'
-                          : 'Forgot your password?',
-                      style: const TextStyle(
-                        color: _primaryColor,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+              child: AuthButtonContent(
+                loading: _isRecoveringPassword,
+                compact: true,
+                label: _espanol
+                    ? '¿Olvidaste tu contraseña?'
+                    : 'Forgot your password?',
+                loadingLabel: _espanol ? 'Enviando...' : 'Sending...',
+              ),
             ),
           ),
 
@@ -984,7 +855,9 @@ class _LoginPageState extends State<LoginPage> {
     final Color haloColor = validationColor ?? _primaryColor;
 
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 180),
+      duration: MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero
+          : const Duration(milliseconds: 180),
       curve: Curves.easeOut,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),

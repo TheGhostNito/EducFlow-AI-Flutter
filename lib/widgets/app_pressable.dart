@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -19,22 +20,43 @@ class AppPressable extends StatefulWidget {
 
 class _AppPressableState extends State<AppPressable> {
   bool _pressed = false;
+  int? _pointer;
+  Offset? _origin;
 
   void _down(PointerDownEvent event) {
-    if (widget.haptic) {
-      HapticFeedback.selectionClick();
+    if (_pointer != null || event.buttons != kPrimaryButton) {
+      return;
     }
-
+    _pointer = event.pointer;
+    _origin = event.position;
     setState(() {
       _pressed = true;
     });
   }
 
+  void _move(PointerMoveEvent event) {
+    if (_pointer == event.pointer &&
+        _pressed &&
+        (event.position - _origin!).distance > kTouchSlop) {
+      setState(() {
+        _pressed = false;
+      });
+    }
+  }
+
   void _up(PointerEvent event) {
+    if (event.pointer != _pointer) {
+      return;
+    }
+    _pointer = null;
+    _origin = null;
     if (!_pressed) {
       return;
     }
-
+    // Desplazar una lista o cancelar el gesto no debe provocar una vibración.
+    if (event is PointerUpEvent && widget.haptic) {
+      HapticFeedback.selectionClick();
+    }
     setState(() {
       _pressed = false;
     });
@@ -42,14 +64,18 @@ class _AppPressableState extends State<AppPressable> {
 
   @override
   Widget build(BuildContext context) {
+    final bool reducirMovimiento = MediaQuery.disableAnimationsOf(context);
     return Listener(
       behavior: HitTestBehavior.translucent,
       onPointerDown: _down,
+      onPointerMove: _move,
       onPointerUp: _up,
       onPointerCancel: _up,
       child: AnimatedScale(
-        scale: _pressed ? widget.scale : 1,
-        duration: const Duration(milliseconds: 140),
+        scale: _pressed && !reducirMovimiento ? widget.scale : 1,
+        duration: reducirMovimiento
+            ? Duration.zero
+            : const Duration(milliseconds: 140),
         curve: const Cubic(0.22, 1, 0.36, 1),
         child: widget.child,
       ),

@@ -1,8 +1,13 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/auth/auth_service.dart';
 import '../../services/translation_service.dart';
+import '../../services/validacion_contrasena.dart';
+import '../../widgets/app_animated_visibility.dart';
+import '../../widgets/auth_feedback.dart';
 import '../../widgets/language_selector.dart';
 import '../../widgets/theme_toggle_button.dart';
 import '../dashboard/dashboard_page.dart';
@@ -36,6 +41,10 @@ class _RegisterPageState extends State<RegisterPage> {
   bool _mostrarContrasena = false;
   bool _mostrarConfirmacion = false;
   bool _cargando = false;
+  bool _requisitosOcultos = false;
+  Timer? _ocultarRequisitosTimer;
+  String _ultimaContrasena = '';
+  String _ultimaConfirmacion = '';
 
   String _errorMessage = '';
 
@@ -80,6 +89,8 @@ class _RegisterPageState extends State<RegisterPage> {
     _contrasenaFocusNode.addListener(_actualizarFoco);
 
     _confirmarContrasenaFocusNode.addListener(_actualizarFoco);
+    _contrasenaController.addListener(_actualizarContrasenas);
+    _confirmarContrasenaController.addListener(_actualizarContrasenas);
   }
 
   void _actualizarFoco() {
@@ -96,12 +107,43 @@ class _RegisterPageState extends State<RegisterPage> {
 
   void _actualizarCampos() {
     if (mounted) {
-      setState(() {});
+      setState(() {
+        _errorMessage = '';
+      });
+    }
+  }
+
+  void _actualizarContrasenas() {
+    final String contrasena = _contrasenaController.text;
+    final String confirmacion = _confirmarContrasenaController.text;
+    // Cambiar la selección o mostrar la contraseña no reinicia los avisos.
+    if (contrasena == _ultimaContrasena &&
+        confirmacion == _ultimaConfirmacion) {
+      return;
+    }
+    _ultimaContrasena = contrasena;
+    _ultimaConfirmacion = confirmacion;
+    _ocultarRequisitosTimer?.cancel();
+    setState(() {
+      _errorMessage = '';
+      _requisitosOcultos = false;
+    });
+    if (_contrasenaValida() && _confirmacionValida()) {
+      _ocultarRequisitosTimer = Timer(const Duration(milliseconds: 1200), () {
+        if (mounted) {
+          setState(() {
+            _requisitosOcultos = true;
+          });
+        }
+      });
     }
   }
 
   @override
   void dispose() {
+    _ocultarRequisitosTimer?.cancel();
+    _contrasenaController.removeListener(_actualizarContrasenas);
+    _confirmarContrasenaController.removeListener(_actualizarContrasenas);
     _translationService.removeListener(_actualizarIdioma);
 
     _nombreFocusNode.dispose();
@@ -130,7 +172,7 @@ class _RegisterPageState extends State<RegisterPage> {
   }
 
   bool _contrasenaValida() {
-    return _contrasenaController.text.length >= 8;
+    return ValidacionContrasena(_contrasenaController.text).esValida;
   }
 
   bool _confirmacionValida() {
@@ -138,9 +180,7 @@ class _RegisterPageState extends State<RegisterPage> {
 
     final String confirmacion = _confirmarContrasenaController.text;
 
-    return contrasena.length >= 8 &&
-        confirmacion.isNotEmpty &&
-        confirmacion == contrasena;
+    return contrasena.isNotEmpty && confirmacion == contrasena;
   }
 
   Color? _colorValidacionNombre() {
@@ -178,11 +218,10 @@ class _RegisterPageState extends State<RegisterPage> {
       return null;
     }
 
-    if (_contrasenaFocusNode.hasFocus) {
-      return _primaryColor;
+    if (_contrasenaValida()) {
+      return _successColor;
     }
-
-    return _contrasenaValida() ? _successColor : _errorColor;
+    return _contrasenaFocusNode.hasFocus ? _primaryColor : null;
   }
 
   Color? _colorValidacionConfirmacion() {
@@ -192,11 +231,10 @@ class _RegisterPageState extends State<RegisterPage> {
       return null;
     }
 
-    if (_confirmarContrasenaFocusNode.hasFocus) {
-      return _primaryColor;
+    if (_confirmacionValida()) {
+      return _successColor;
     }
-
-    return _confirmacionValida() ? _successColor : _errorColor;
+    return _confirmarContrasenaFocusNode.hasFocus ? _primaryColor : null;
   }
 
   // =========================================================
@@ -245,11 +283,11 @@ class _RegisterPageState extends State<RegisterPage> {
       return;
     }
 
-    if (contrasena.length < 8) {
+    if (!_contrasenaValida()) {
       setState(() {
         _errorMessage = _espanol
-            ? 'La contraseña debe tener al menos 8 caracteres.'
-            : 'The password must contain at least 8 characters.';
+            ? 'La contraseña debe tener al menos 8 caracteres, 1 número y 1 carácter especial.'
+            : 'The password must contain at least 8 characters, 1 number and 1 special character.';
       });
 
       return;
@@ -678,24 +716,22 @@ class _RegisterPageState extends State<RegisterPage> {
               focusNode: _contrasenaFocusNode,
               enabled: !_cargando,
               obscureText: !_mostrarContrasena,
+              autocorrect: false,
+              enableSuggestions: false,
               textInputAction: TextInputAction.next,
               autofillHints: const [AutofillHints.newPassword],
               cursorColor: _primaryColor,
               style: _inputTextStyle(oscuro),
-              onChanged: (_) {
-                _actualizarCampos();
-              },
               decoration: _inputDecoration(
                 hintText: _espanol
-                    ? 'Mínimo 8 caracteres'
-                    : 'At least 8 characters',
+                    ? 'Crea tu contraseña'
+                    : 'Create your password',
                 icon: Icons.lock_outline,
                 modoCompacto: modoCompacto,
                 oscuro: oscuro,
                 validationColor: _colorValidacionContrasena(),
-                suffixIcon: _visibilityButton(
+                suffixIcon: PasswordVisibilityButton(
                   visible: _mostrarContrasena,
-                  oscuro: oscuro,
                   onPressed: _cargando
                       ? null
                       : () {
@@ -707,6 +743,8 @@ class _RegisterPageState extends State<RegisterPage> {
               ),
             ),
           ),
+
+          _buildPasswordRequirements(oscuro),
 
           SizedBox(height: modoCompacto ? 11 : 17),
 
@@ -728,13 +766,12 @@ class _RegisterPageState extends State<RegisterPage> {
               focusNode: _confirmarContrasenaFocusNode,
               enabled: !_cargando,
               obscureText: !_mostrarConfirmacion,
+              autocorrect: false,
+              enableSuggestions: false,
               textInputAction: TextInputAction.done,
               autofillHints: const [AutofillHints.newPassword],
               cursorColor: _primaryColor,
               style: _inputTextStyle(oscuro),
-              onChanged: (_) {
-                _actualizarCampos();
-              },
               onSubmitted: (_) {
                 if (!_cargando) {
                   _registrar();
@@ -748,9 +785,8 @@ class _RegisterPageState extends State<RegisterPage> {
                 modoCompacto: modoCompacto,
                 oscuro: oscuro,
                 validationColor: _colorValidacionConfirmacion(),
-                suffixIcon: _visibilityButton(
+                suffixIcon: PasswordVisibilityButton(
                   visible: _mostrarConfirmacion,
-                  oscuro: oscuro,
                   onPressed: _cargando
                       ? null
                       : () {
@@ -763,56 +799,18 @@ class _RegisterPageState extends State<RegisterPage> {
             ),
           ),
 
+          _buildConfirmationFeedback(oscuro),
+
           SizedBox(height: modoCompacto ? 8 : 14),
 
           // ===================================================
           // ERROR
           // ===================================================
-          if (_errorMessage.isNotEmpty) ...[
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: oscuro
-                    ? const Color(0xFF321D22)
-                    : const Color(0xFFFEF2F2),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: oscuro
-                      ? const Color(0xFF5F2B31)
-                      : const Color(0xFFFECACA),
-                ),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(
-                    Icons.error_outline,
-                    color: oscuro
-                        ? const Color(0xFFFCA5A5)
-                        : const Color(0xFFB91C1C),
-                    size: 19,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      _errorMessage,
-                      style: TextStyle(
-                        color: oscuro
-                            ? const Color(0xFFFCA5A5)
-                            : const Color(0xFFB91C1C),
-                        fontSize: 13,
-                        height: 1.4,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            SizedBox(height: modoCompacto ? 10 : 14),
-          ] else
-            SizedBox(height: modoCompacto ? 4 : 8),
+          AuthStatusMessage(
+            message: _errorMessage,
+            padding: const EdgeInsets.only(bottom: 6),
+          ),
+          SizedBox(height: modoCompacto ? 4 : 8),
 
           // ===================================================
           // BOTÓN CREAR CUENTA
@@ -833,37 +831,13 @@ class _RegisterPageState extends State<RegisterPage> {
                   borderRadius: BorderRadius.circular(14),
                 ),
               ),
-              child: _cargando
-                  ? Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const SizedBox(
-                          width: 19,
-                          height: 19,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.2,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(width: 9),
-                        Text(
-                          _espanol
-                              ? 'Creando cuenta...'
-                              : 'Creating account...',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    )
-                  : Text(
-                      _espanol ? 'Crear cuenta' : 'Create account',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+              child: AuthButtonContent(
+                loading: _cargando,
+                label: _espanol ? 'Crear cuenta' : 'Create account',
+                loadingLabel: _espanol
+                    ? 'Creando cuenta...'
+                    : 'Creating account...',
+              ),
             ),
           ),
 
@@ -922,7 +896,9 @@ class _RegisterPageState extends State<RegisterPage> {
     final Color haloColor = validationColor ?? _primaryColor;
 
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 180),
+      duration: MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero
+          : const Duration(milliseconds: 180),
       curve: Curves.easeOut,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
@@ -952,19 +928,116 @@ class _RegisterPageState extends State<RegisterPage> {
   }
 
   // =========================================================
-  // BOTÓN OJO
+  // REQUISITOS Y CONFIRMACIÓN
   // =========================================================
 
-  Widget _visibilityButton({
-    required bool visible,
+  Widget _buildPasswordRequirements(bool oscuro) {
+    final validacion = ValidacionContrasena(_contrasenaController.text);
+    return AppAnimatedVisibility(
+      visible: !_requisitosOcultos,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(2, 10, 2, 0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildPasswordStatus(
+              text: _espanol ? 'Mínimo 8 caracteres' : 'At least 8 characters',
+              cumplido: validacion.longitudValida,
+              oscuro: oscuro,
+            ),
+            const SizedBox(height: 5),
+            _buildPasswordStatus(
+              text: _espanol ? 'Al menos 1 número' : 'At least 1 number',
+              cumplido: validacion.tieneNumero,
+              oscuro: oscuro,
+            ),
+            const SizedBox(height: 5),
+            _buildPasswordStatus(
+              text: _espanol
+                  ? 'Al menos 1 carácter especial'
+                  : 'At least 1 special character',
+              cumplido: validacion.tieneCaracterEspecial,
+              oscuro: oscuro,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildConfirmationFeedback(bool oscuro) {
+    final String contrasena = _contrasenaController.text;
+    final String confirmacion = _confirmarContrasenaController.text;
+    final bool coinciden = _confirmacionValida();
+    final bool comparar =
+        contrasena.isNotEmpty &&
+        confirmacion.isNotEmpty &&
+        (coinciden ||
+            confirmacion.runes.length >= 3 ||
+            confirmacion.length >= contrasena.length ||
+            !_confirmarContrasenaFocusNode.hasFocus);
+
+    return AppAnimatedVisibility(
+      visible: comparar && !_requisitosOcultos,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(2, 9, 2, 0),
+        child: Semantics(
+          liveRegion: true,
+          child: _buildPasswordStatus(
+            text: coinciden
+                ? (_espanol ? 'Las contraseñas coinciden' : 'Passwords match')
+                : (_espanol
+                      ? 'Las contraseñas aún no coinciden'
+                      : 'Passwords do not match yet'),
+            cumplido: coinciden,
+            oscuro: oscuro,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPasswordStatus({
+    required String text,
+    required bool cumplido,
     required bool oscuro,
-    required VoidCallback? onPressed,
   }) {
-    return IconButton(
-      onPressed: onPressed,
-      icon: Icon(
-        visible ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-        color: oscuro ? const Color(0xFFA9B1BF) : const Color(0xFF7B8492),
+    final Color color = cumplido
+        ? (oscuro ? const Color(0xFF6EE7B7) : const Color(0xFF047857))
+        : (oscuro ? const Color(0xFFA9B1BF) : const Color(0xFF6B7280));
+    final Duration duration = MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : const Duration(milliseconds: 180);
+    return Semantics(
+      label:
+          '$text. ${cumplido ? (_espanol ? 'Cumplido' : 'Met') : (_espanol ? 'Pendiente' : 'Pending')}',
+      excludeSemantics: true,
+      child: TweenAnimationBuilder<Color?>(
+        tween: ColorTween(begin: color, end: color),
+        duration: duration,
+        builder: (context, color, child) => Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            AnimatedSwitcher(
+              duration: duration,
+              child: Icon(
+                cumplido
+                    ? Icons.check_circle_rounded
+                    : Icons.radio_button_unchecked_rounded,
+                key: ValueKey(cumplido),
+                size: 17,
+                color: color,
+              ),
+            ),
+            const SizedBox(width: 7),
+            Expanded(
+              child: Text(
+                text,
+                style: TextStyle(color: color, fontSize: 12.5, height: 1.35),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
