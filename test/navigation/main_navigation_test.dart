@@ -247,6 +247,34 @@ void main() {
     expect(payloads.value, isNull);
   });
 
+  testWidgets('una evaluación específica llega al Calendario por ID', (
+    tester,
+  ) async {
+    await mostrar(
+      tester,
+      sectionBuilder: (_, section, payload) => Builder(
+        builder: (context) => Scaffold(
+          body: Column(
+            children: [
+              Text('seccion:${section.name}'),
+              if (payload != null) Text(payload),
+              TextButton(
+                onPressed: () =>
+                    MainNavigation.openEvaluation(context, 'evaluation-42'),
+                child: const Text('Abrir evaluación'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Abrir evaluación'));
+    await tester.pump();
+    expect(find.text('seccion:calendario'), findsOneWidget);
+    expect(find.text('evaluation:evaluation-42'), findsOneWidget);
+  });
+
   testWidgets('una notificación no elimina un formulario secundario abierto', (
     tester,
   ) async {

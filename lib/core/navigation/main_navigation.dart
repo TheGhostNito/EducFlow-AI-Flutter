@@ -37,6 +37,18 @@ class MainNavigation extends StatefulWidget {
     state?._select(section);
   }
 
+  static void openEvaluation(BuildContext context, String evaluationId) {
+    final state = context.findAncestorStateOfType<_MainNavigationState>();
+    assert(
+      state != null,
+      'El Calendario debe abrirse dentro de MainNavigation.',
+    );
+    state?._select(
+      SeccionPrincipal.calendario,
+      payload: 'evaluation:${evaluationId.trim()}',
+    );
+  }
+
   @override
   State<MainNavigation> createState() => _MainNavigationState();
 }
@@ -100,7 +112,11 @@ class _MainNavigationState extends State<MainNavigation> {
       SeccionPrincipal.inicio => const DashboardPage(),
       SeccionPrincipal.horario => const SchedulePage(),
       SeccionPrincipal.ia => const AiChatPage(),
-      SeccionPrincipal.calendario => const CalendarPage(),
+      SeccionPrincipal.calendario => CalendarPage(
+        initialEvaluationId: payload?.startsWith('evaluation:') == true
+            ? payload!.substring('evaluation:'.length)
+            : null,
+      ),
       SeccionPrincipal.notificaciones => NotificationsPage(
         initialPayload: payload,
       ),

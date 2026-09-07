@@ -33,7 +33,9 @@ import '../../widgets/app_status_snackbar.dart';
 import '../schedule/widgets/schedule_class_edit_sheet.dart';
 
 class CalendarPage extends StatefulWidget {
-  const CalendarPage({super.key});
+  const CalendarPage({this.initialEvaluationId, super.key});
+
+  final String? initialEvaluationId;
 
   @override
   State<CalendarPage> createState() => _CalendarPageState();
@@ -73,6 +75,7 @@ class _CalendarPageState extends State<CalendarPage> {
 
   bool _cargando = true;
   bool _error = false;
+  bool _initialEvaluationHandled = false;
 
   bool _calendarioExpandido = false;
 
@@ -197,6 +200,7 @@ class _CalendarPageState extends State<CalendarPage> {
         _evaluaciones = resultados[3] as List<Evaluacion>;
         _error = false;
       });
+      _scheduleInitialEvaluationDetail();
     } catch (_) {
       if (!mounted) {
         return;
@@ -214,6 +218,20 @@ class _CalendarPageState extends State<CalendarPage> {
         });
       }
     }
+  }
+
+  void _scheduleInitialEvaluationDetail() {
+    if (_initialEvaluationHandled) return;
+    final Evaluacion? evaluation = findEvaluationForInitialDetail(
+      _evaluaciones,
+      widget.initialEvaluationId,
+    );
+    _initialEvaluationHandled = true;
+    if (evaluation == null) return;
+    setState(() => _fechaSeleccionada = evaluation.fecha);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _abrirEvaluacionCalendario(evaluation);
+    });
   }
 
   Future<void> _refrescar() async {
@@ -2940,6 +2958,18 @@ class _CalendarPageState extends State<CalendarPage> {
             ],
     );
   }
+}
+
+Evaluacion? findEvaluationForInitialDetail(
+  List<Evaluacion> evaluations,
+  String? evaluationId,
+) {
+  final String cleanId = evaluationId?.trim() ?? '';
+  if (cleanId.isEmpty) return null;
+  for (final Evaluacion evaluation in evaluations) {
+    if (evaluation.id == cleanId) return evaluation;
+  }
+  return null;
 }
 
 // ===========================================================

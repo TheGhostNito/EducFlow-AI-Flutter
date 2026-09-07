@@ -7,6 +7,12 @@
 - Al terminar una tarea, indica qué archivos se modificaron y qué se hizo en cada uno; informa también las validaciones realizadas y sus limitaciones.
 - No hagas commits ni push a GitHub salvo solicitud explícita del usuario.
 
+## Identidad del asistente
+
+- En este proyecto, el asistente Codex también puede ser llamado **Viernes** o **Friday**.
+- Cuando el usuario utilice cualquiera de esos nombres, se está refiriendo al asistente técnico Codex encargado de analizar y modificar el código de EducFlow AI.
+- Puede responder indistintamente a “Viernes” o “Friday” sin pedir aclaración.
+
 ## Identidad y tecnología del proyecto
 
 - El nombre oficial es exactamente **EducFlow AI**. No lo cambies ni lo traduzcas.

@@ -16,7 +16,9 @@ import 'widgets/task_edit_sheet.dart';
 import 'widgets/task_detail_sheet.dart';
 
 class TasksPage extends StatefulWidget {
-  const TasksPage({super.key});
+  const TasksPage({this.initialTaskId, super.key});
+
+  final String? initialTaskId;
 
   @override
   State<TasksPage> createState() => _TasksPageState();
@@ -42,6 +44,7 @@ class _TasksPageState extends State<TasksPage> {
   bool _error = false;
   bool _mostrarCompletadas = false;
   String? _procesandoTareaId;
+  bool _initialDetailHandled = false;
 
   double _progresoHeader = 0;
 
@@ -146,6 +149,7 @@ class _TasksPageState extends State<TasksPage> {
         _asignaturas = asignaturas;
         _error = false;
       });
+      _scheduleInitialTaskDetail();
     } catch (_) {
       if (!mounted) {
         return;
@@ -163,6 +167,16 @@ class _TasksPageState extends State<TasksPage> {
         });
       }
     }
+  }
+
+  void _scheduleInitialTaskDetail() {
+    if (_initialDetailHandled) return;
+    final Tarea? task = findTaskForInitialDetail(_tareas, widget.initialTaskId);
+    _initialDetailHandled = true;
+    if (task == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _abrirDetalleTarea(task);
+    });
   }
 
   Future<void> _refrescar() async {
@@ -1416,4 +1430,13 @@ class _TasksPageState extends State<TasksPage> {
             ],
     );
   }
+}
+
+Tarea? findTaskForInitialDetail(List<Tarea> tasks, String? taskId) {
+  final String cleanId = taskId?.trim() ?? '';
+  if (cleanId.isEmpty) return null;
+  for (final Tarea task in tasks) {
+    if (task.id == cleanId) return task;
+  }
+  return null;
 }

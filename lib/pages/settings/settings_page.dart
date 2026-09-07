@@ -10,6 +10,7 @@ import '../../widgets/app_reveal.dart';
 import '../../widgets/app_scroll_header.dart';
 import '../../services/time_format_service.dart';
 import 'notification_preferences_page.dart';
+import 'home_customization_page.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -139,6 +140,12 @@ class _SettingsPageState extends State<SettingsPage>
     await Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const NotificationPreferencesPage()),
     );
+  }
+
+  Future<void> _abrirPersonalizarInicio() async {
+    HapticFeedback.selectionClick();
+    await Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const HomeCustomizationPage()));
   }
 
   // =========================================================
@@ -585,8 +592,12 @@ class _SettingsPageState extends State<SettingsPage>
       });
     }
 
-    final EstadoNotificaciones estado = await _notificationService
-        .obtenerEstado();
+    EstadoNotificaciones estado;
+    try {
+      estado = await _notificationService.obtenerEstado();
+    } catch (_) {
+      estado = EstadoNotificaciones.noCompatibles;
+    }
 
     if (!mounted) {
       return;
@@ -745,21 +756,28 @@ class _SettingsPageState extends State<SettingsPage>
                               const SizedBox(height: 26),
 
                               AppReveal(
-                                delay: const Duration(milliseconds: 70),
+                                delay: const Duration(milliseconds: 55),
+                                child: _buildHomeCustomizationSection(oscuro),
+                              ),
+
+                              const SizedBox(height: 26),
+
+                              AppReveal(
+                                delay: const Duration(milliseconds: 110),
                                 child: _buildLanguageSection(oscuro, ancho),
                               ),
 
                               const SizedBox(height: 26),
 
                               AppReveal(
-                                delay: const Duration(milliseconds: 140),
+                                delay: const Duration(milliseconds: 165),
                                 child: _buildTimeFormatSection(oscuro),
                               ),
 
                               const SizedBox(height: 26),
 
                               AppReveal(
-                                delay: const Duration(milliseconds: 210),
+                                delay: const Duration(milliseconds: 220),
                                 child: _buildNotificationsSection(oscuro),
                               ),
                             ],
@@ -1171,6 +1189,61 @@ class _SettingsPageState extends State<SettingsPage>
           ),
         );
       },
+    );
+  }
+
+  // =========================================================
+  // PERSONALIZAR INICIO
+  // =========================================================
+
+  Widget _buildHomeCustomizationSection(bool oscuro) {
+    return _buildSection(
+      oscuro: oscuro,
+      label: _espanol ? 'INICIO' : 'HOME',
+      child: _buildSettingsCard(
+        oscuro: oscuro,
+        child: AppPressable(
+          scale: 0.99,
+          child: GestureDetector(
+            key: const Key('open-home-customization'),
+            behavior: HitTestBehavior.opaque,
+            onTap: _abrirPersonalizarInicio,
+            child: _buildSettingRow(
+              oscuro: oscuro,
+              icon: Icons.dashboard_customize_outlined,
+              iconColor: _primaryColor,
+              iconBackground: oscuro
+                  ? const Color(0xFF2B3047)
+                  : const Color(0xFFEEF0FF),
+              title: _espanol ? 'Personalizar Inicio' : 'Customize Home',
+              description: _espanol
+                  ? 'Elige qué información quieres ver.'
+                  : 'Choose what information you want to see.',
+              trailing: Container(
+                width: 40,
+                height: 40,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: oscuro
+                      ? const Color(0xFF222833)
+                      : const Color(0xFFFAFBFC),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: oscuro
+                        ? const Color(0xFF303744)
+                        : const Color(0xFFDFE3EA),
+                  ),
+                ),
+                child: const Icon(
+                  Icons.chevron_right_rounded,
+                  color: _primaryColor,
+                  size: 20,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
