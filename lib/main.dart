@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -17,6 +19,26 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await Supabase.initialize(
+    url: 'https://ubjmdfwkjgblnjgmufpc.supabase.co',
+    publishableKey: 'sb_publishable_DmUj02VfZSkZOzoR11oq5A_TumX6rfA',
+    debug: kDebugMode,
+    accessToken: () async {
+      final user = FirebaseAuth.instance.currentUser;
+
+      if (user == null) {
+        return null;
+      }
+
+      final tokenResult = await user.getIdTokenResult();
+
+      if (tokenResult.claims?['role'] != 'authenticated') {
+        return user.getIdToken(true);
+      }
+
+      return tokenResult.token;
+    },
+  );
   await FirebaseAppCheck.instance.activate(
     providerWeb: kDebugMode
         ? WebDebugProvider()

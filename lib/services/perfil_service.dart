@@ -1,12 +1,32 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart'
+    show Supabase, SupabaseClient;
 
 import '../models/perfil_usuario.dart';
 
 class PerfilService {
-  PerfilService({FirebaseFirestore? firestore})
-    : _firestore = firestore ?? FirebaseFirestore.instance;
+  PerfilService({
+    SupabaseClient? supabase,
+    FirebaseAuth? firebaseAuth,
+  }) : _supabase = supabase ?? Supabase.instance.client,
+       _firebaseAuth = firebaseAuth ?? FirebaseAuth.instance;
 
-  final FirebaseFirestore _firestore;
+  final SupabaseClient _supabase;
+  final FirebaseAuth _firebaseAuth;
+
+  // =========================================================
+  // VALIDAR USUARIO ACTUAL
+  // =========================================================
+
+  void _validarUsuario(String uid) {
+    final usuarioActual = _firebaseAuth.currentUser;
+
+    if (usuarioActual == null || usuarioActual.uid != uid) {
+      throw StateError(
+        'La operación de perfil no corresponde al usuario autenticado.',
+      );
+    }
+  }
 
   // =========================================================
   // CREAR PERFIL INICIAL
@@ -18,46 +38,25 @@ class PerfilService {
     required String correoPrincipal,
     required String idioma,
   }) async {
-    final DocumentReference<Map<String, dynamic>> referencia = _firestore
-        .collection('usuarios')
-        .doc(uid);
+    _validarUsuario(uid);
 
-    await referencia.set({
+    await _supabase.from('usuarios').insert({
       'uid': uid,
-
       'nombre': nombre.trim(),
-
-      'correoPrincipal': correoPrincipal.trim().toLowerCase(),
-
-      'correoInstitucional': '',
-
-      'nivelEducativo': '',
-
-      'nombreEstablecimiento': '',
-
-      'tipoEstablecimiento': '',
-
-      'cursoActual': '',
-
+      'correo_principal': correoPrincipal.trim().toLowerCase(),
+      'correo_institucional': '',
+      'nivel_educativo': null,
+      'nombre_establecimiento': '',
+      'tipo_establecimiento': '',
+      'curso_actual': '',
       'carrera': '',
-
-      'semestreActual': null,
-
-      'anioIngreso': null,
-
+      'semestre_actual': null,
+      'anio_ingreso': null,
       'sede': '',
-
       'jornada': '',
-
-      'estadoAcademico': '',
-
+      'estado_academico': '',
       'idioma': idioma == 'en' ? 'en' : 'es',
-
-      'perfilCompleto': false,
-
-      'fechaCreacion': FieldValue.serverTimestamp(),
-
-      'fechaActualizacion': FieldValue.serverTimestamp(),
+      'perfil_completo': false,
     });
   }
 
@@ -66,24 +65,58 @@ class PerfilService {
   // =========================================================
 
   Future<PerfilUsuario?> obtenerPerfil(String uid) async {
-    final DocumentReference<Map<String, dynamic>> referencia = _firestore
-        .collection('usuarios')
-        .doc(uid);
+    _validarUsuario(uid);
 
-    final DocumentSnapshot<Map<String, dynamic>> resultado = await referencia
-        .get();
+    final resultado = await _supabase
+        .from('usuarios')
+        .select(
+          '''
+          uid,
+          nombre,
+          correo_principal,
+          correo_institucional,
+          nivel_educativo,
+          nombre_establecimiento,
+          tipo_establecimiento,
+          curso_actual,
+          carrera,
+          semestre_actual,
+          anio_ingreso,
+          sede,
+          jornada,
+          estado_academico,
+          idioma,
+          perfil_completo
+          ''',
+        )
+        .eq('uid', uid)
+        .maybeSingle();
 
-    if (!resultado.exists) {
+    if (resultado == null) {
       return null;
     }
 
-    final Map<String, dynamic>? data = resultado.data();
-
-    if (data == null) {
-      return null;
-    }
-
-    return PerfilUsuario.fromMap(data, uidFallback: resultado.id);
+    return PerfilUsuario.fromMap(
+      {
+        'uid': resultado['uid'],
+        'nombre': resultado['nombre'],
+        'correoPrincipal': resultado['correo_principal'],
+        'correoInstitucional': resultado['correo_institucional'],
+        'nivelEducativo': resultado['nivel_educativo'],
+        'nombreEstablecimiento': resultado['nombre_establecimiento'],
+        'tipoEstablecimiento': resultado['tipo_establecimiento'],
+        'cursoActual': resultado['curso_actual'],
+        'carrera': resultado['carrera'],
+        'semestreActual': resultado['semestre_actual'],
+        'anioIngreso': resultado['anio_ingreso'],
+        'sede': resultado['sede'],
+        'jornada': resultado['jornada'],
+        'estadoAcademico': resultado['estado_academico'],
+        'idioma': resultado['idioma'],
+        'perfilCompleto': resultado['perfil_completo'],
+      },
+      uidFallback: uid,
+    );
   }
 
   // =========================================================
@@ -94,71 +127,92 @@ class PerfilService {
     String uid,
     ActualizarPerfilUsuario datos,
   ) async {
-    final DocumentReference<Map<String, dynamic>> referencia = _firestore
-        .collection('usuarios')
-        .doc(uid);
+    _validarUsuario(uid);
 
     final String nombre = datos.nombre.trim();
 
-    final String correoInstitucional = datos.correoInstitucional
-        .trim()
-        .toLowerCase();
+    final String correoInstitucional =
+        datos.correoInstitucional.trim().toLowerCase();
 
-    final String nombreEstablecimiento = datos.nombreEstablecimiento.trim();
+    final String nombreEstablecimiento =
+        datos.nombreEstablecimiento.trim();
 
-    final String tipoEstablecimiento = datos.tipoEstablecimiento.trim();
+    final String tipoEstablecimiento =
+        datos.tipoEstablecimiento.trim();
 
-    final String cursoActual = datos.cursoActual.trim();
+    final String cursoActual =
+        datos.cursoActual.trim();
 
-    final String carrera = datos.carrera.trim();
+    final String carrera =
+        datos.carrera.trim();
 
-    final String sede = datos.sede.trim();
+    final String sede =
+        datos.sede.trim();
 
-    final String jornada = datos.jornada.trim();
+    final String jornada =
+        datos.jornada.trim();
 
-    final String estadoAcademico = datos.estadoAcademico.trim();
+    final String estadoAcademico =
+        datos.estadoAcademico.trim();
 
-    final bool perfilCompleto = _comprobarPerfilCompleto(
-      nombre: nombre,
-      nivelEducativo: datos.nivelEducativo,
-      nombreEstablecimiento: nombreEstablecimiento,
-      cursoActual: cursoActual,
-      carrera: carrera,
-      semestreActual: datos.semestreActual,
-      anioIngreso: datos.anioIngreso,
-    );
+    final bool perfilCompleto =
+        _comprobarPerfilCompleto(
+          nombre: nombre,
+          nivelEducativo:
+              datos.nivelEducativo,
+          nombreEstablecimiento:
+              nombreEstablecimiento,
+          cursoActual:
+              cursoActual,
+          carrera:
+              carrera,
+          semestreActual:
+              datos.semestreActual,
+          anioIngreso:
+              datos.anioIngreso,
+        );
 
-    await referencia.update({
-      'nombre': nombre,
-
-      'correoInstitucional': correoInstitucional,
-
-      'nivelEducativo': datos.nivelEducativo.valorFirestore,
-
-      'nombreEstablecimiento': nombreEstablecimiento,
-
-      'tipoEstablecimiento': tipoEstablecimiento,
-
-      'cursoActual': cursoActual,
-
-      'carrera': carrera,
-
-      'semestreActual': datos.semestreActual,
-
-      'anioIngreso': datos.anioIngreso,
-
-      'sede': sede,
-
-      'jornada': jornada,
-
-      'estadoAcademico': estadoAcademico,
-
-      'idioma': datos.idioma == 'en' ? 'en' : 'es',
-
-      'perfilCompleto': perfilCompleto,
-
-      'fechaActualizacion': FieldValue.serverTimestamp(),
-    });
+    await _supabase
+        .from('usuarios')
+        .update({
+          'nombre': nombre,
+          'correo_institucional':
+              correoInstitucional,
+          'nivel_educativo':
+              datos.nivelEducativo ==
+                  NivelEducativoPerfil.vacio
+              ? null
+              : datos.nivelEducativo.valorFirestore,
+          'nombre_establecimiento':
+              nombreEstablecimiento,
+          'tipo_establecimiento':
+              tipoEstablecimiento,
+          'curso_actual':
+              cursoActual,
+          'carrera':
+              carrera,
+          'semestre_actual':
+              datos.semestreActual,
+          'anio_ingreso':
+              datos.anioIngreso,
+          'sede':
+              sede,
+          'jornada':
+              jornada,
+          'estado_academico':
+              estadoAcademico,
+          'idioma':
+              datos.idioma == 'en'
+              ? 'en'
+              : 'es',
+          'perfil_completo':
+              perfilCompleto,
+          'fecha_actualizacion':
+              DateTime.now()
+                  .toUtc()
+                  .toIso8601String(),
+        })
+        .eq('uid', uid);
   }
 
   // =========================================================
@@ -192,7 +246,8 @@ class PerfilService {
 
     if (nivelEducativo == NivelEducativoPerfil.superior ||
         nivelEducativo == NivelEducativoPerfil.tecnico) {
-      return carrera.trim().isNotEmpty && semestreActual != null;
+      return carrera.trim().isNotEmpty &&
+          semestreActual != null;
     }
 
     if (nivelEducativo == NivelEducativoPerfil.curso ||

@@ -1,15 +1,17 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show Supabase;
 
 import '../../services/perfil_service.dart';
-
 import '../../services/theme_service.dart';
 import '../../services/translation_service.dart';
 import '../../services/time_format_service.dart';
 
 class AuthService {
-  AuthService({FirebaseAuth? firebaseAuth, PerfilService? perfilService})
-    : _firebaseAuth = firebaseAuth ?? FirebaseAuth.instance,
-      _perfilService = perfilService ?? PerfilService();
+  AuthService({
+    FirebaseAuth? firebaseAuth,
+    PerfilService? perfilService,
+  }) : _firebaseAuth = firebaseAuth ?? FirebaseAuth.instance,
+       _perfilService = perfilService ?? PerfilService();
 
   final FirebaseAuth _firebaseAuth;
   final PerfilService _perfilService;
@@ -19,6 +21,73 @@ class AuthService {
   bool get estaAutenticado => usuarioActual != null;
 
   Stream<User?> get usuarioStream => _firebaseAuth.authStateChanges();
+
+  // =========================================================
+  // ASEGURAR ROLE DE SUPABASE
+  // =========================================================
+
+  Future<void> _asegurarRoleSupabase(User usuario) async {
+    final token = await usuario.getIdToken();
+
+    if (token == null || token.isEmpty) {
+      throw FirebaseAuthException(
+        code: 'missing-id-token',
+        message: 'No fue posible obtener la credencial del usuario.',
+      );
+    }
+
+    try {
+      final response = await Supabase.instance.client.functions.invoke(
+        'firebase-role',
+        headers: {
+          'Authorization': 'Bearer $token',
+        },
+        body: const <String, dynamic>{},
+      );
+
+      final data = response.data;
+
+      if (data is! Map || data['success'] != true) {
+        throw FirebaseAuthException(
+          code: 'role-assignment-failed',
+          message:
+              'No fue posible preparar la cuenta para acceder a los datos.',
+        );
+      }
+
+      final bool necesitaRenovarToken = data['refreshToken'] == true;
+
+      if (necesitaRenovarToken) {
+        await usuario.getIdToken(true);
+      }
+
+      final tokenResult = await usuario.getIdTokenResult();
+
+      if (tokenResult.claims?['role'] != 'authenticated') {
+        // Una última renovación por seguridad ante caché local.
+        final refreshedResult = await usuario.getIdTokenResult(true);
+
+        if (refreshedResult.claims?['role'] != 'authenticated') {
+          throw FirebaseAuthException(
+            code: 'role-not-available',
+            message:
+                'La cuenta todavía no está preparada para acceder a los datos.',
+          );
+        }
+      }
+    } on FirebaseAuthException {
+      rethrow;
+    } catch (_) {
+      throw FirebaseAuthException(
+        code: 'role-assignment-failed',
+        message: 'No fue posible preparar la cuenta para acceder a los datos.',
+      );
+    }
+  }
+
+  // =========================================================
+  // REGISTRO
+  // =========================================================
 
   Future<UserCredential> registrar({
     required String nombre,
@@ -49,6 +118,10 @@ class AuthService {
       await usuario.reload();
     }
 
+    // Antes de acceder a PostgreSQL/Supabase,
+    // aseguramos role=authenticated.
+    await _asegurarRoleSupabase(usuario);
+
     await _perfilService.crearPerfilInicial(
       uid: usuario.uid,
       nombre: nombreNormalizado,
@@ -56,7 +129,9 @@ class AuthService {
       idioma: idioma,
     );
 
-    await ThemeService.instance.loadCurrentUserPreferences(forceRefresh: true);
+    await ThemeService.instance.loadCurrentUserPreferences(
+      forceRefresh: true,
+    );
 
     await TranslationService.instance.loadCurrentUserPreferences(
       forceRefresh: false,
@@ -68,6 +143,10 @@ class AuthService {
 
     return credencial;
   }
+
+  // =========================================================
+  // INICIAR SESIÓN
+  // =========================================================
 
   Future<UserCredential> iniciarSesion({
     required String correo,
@@ -81,7 +160,23 @@ class AuthService {
           password: contrasena,
         );
 
-    await ThemeService.instance.loadCurrentUserPreferences(forceRefresh: true);
+    final usuario = credencial.user;
+
+    if (usuario == null) {
+      throw FirebaseAuthException(
+        code: 'user-not-found',
+        message: 'No fue posible obtener el usuario autenticado.',
+      );
+    }
+
+    // También lo comprobamos al iniciar sesión.
+    // Esto recupera automáticamente cuentas antiguas
+    // o registros interrumpidos.
+    await _asegurarRoleSupabase(usuario);
+
+    await ThemeService.instance.loadCurrentUserPreferences(
+      forceRefresh: true,
+    );
 
     await TranslationService.instance.loadCurrentUserPreferences(
       forceRefresh: false,
@@ -94,6 +189,10 @@ class AuthService {
     return credencial;
   }
 
+  // =========================================================
+  // CERRAR SESIÓN
+  // =========================================================
+
   Future<void> cerrarSesion() async {
     await _firebaseAuth.signOut();
 
@@ -104,13 +203,23 @@ class AuthService {
     await TimeFormatService.instance.resetForSignedOutUser();
   }
 
-  Future<void> recuperarContrasena({required String correo}) async {
+  // =========================================================
+  // RECUPERAR CONTRASEÑA
+  // =========================================================
+
+  Future<void> recuperarContrasena({
+    required String correo,
+  }) async {
     final correoNormalizado = correo.trim().toLowerCase();
 
     if (correoNormalizado.isEmpty) {
-      throw ArgumentError('Debe ingresar un correo electrónico.');
+      throw ArgumentError(
+        'Debe ingresar un correo electrónico.',
+      );
     }
 
-    await _firebaseAuth.sendPasswordResetEmail(email: correoNormalizado);
+    await _firebaseAuth.sendPasswordResetEmail(
+      email: correoNormalizado,
+    );
   }
 }

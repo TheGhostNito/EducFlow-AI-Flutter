@@ -12,8 +12,8 @@ class AuthGate extends StatefulWidget {
 }
 
 class _AuthGateState extends State<AuthGate> {
-  late final Stream<User?> _userStream = FirebaseAuth.instance
-      .authStateChanges();
+  late final Stream<User?> _userStream =
+      FirebaseAuth.instance.authStateChanges();
 
   @override
   Widget build(BuildContext context) {
@@ -24,11 +24,16 @@ class _AuthGateState extends State<AuthGate> {
           return Scaffold(
             backgroundColor: Theme.of(context).scaffoldBackgroundColor,
             body: const Center(
-              child: CircularProgressIndicator(color: Color(0xFF5B5FEF)),
+              child: CircularProgressIndicator(
+                color: Color(0xFF5B5FEF),
+              ),
             ),
           );
         }
-        return snapshot.hasData ? const MainNavigation() : const LoginPage();
+
+        return snapshot.hasData
+            ? const MainNavigation()
+            : const LoginPage();
       },
     );
   }
