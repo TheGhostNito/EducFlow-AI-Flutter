@@ -2,6 +2,16 @@ import 'package:flutter/material.dart';
 
 enum AppStatusType { success, error, warning, info }
 
+double appStatusProgressFraction({
+  required Duration duration,
+  required DateTime expiresAt,
+  required DateTime now,
+}) {
+  if (duration <= Duration.zero) return 0;
+  final Duration remaining = expiresAt.difference(now);
+  return (remaining.inMicroseconds / duration.inMicroseconds).clamp(0.0, 1.0);
+}
+
 void showAppStatusSnackBar(
   BuildContext context, {
   required String message,
@@ -10,6 +20,7 @@ void showAppStatusSnackBar(
   double bottomMargin = 16,
 }) {
   final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+  final DateTime expiresAt = DateTime.now().add(duration);
 
   messenger
     ..hideCurrentSnackBar()
@@ -25,6 +36,7 @@ void showAppStatusSnackBar(
           message: message,
           type: type,
           duration: duration,
+          expiresAt: expiresAt,
         ),
       ),
     );
@@ -35,11 +47,13 @@ class _AppStatusSnackBar extends StatefulWidget {
     required this.message,
     required this.type,
     required this.duration,
+    required this.expiresAt,
   });
 
   final String message;
   final AppStatusType type;
   final Duration duration;
+  final DateTime expiresAt;
 
   @override
   State<_AppStatusSnackBar> createState() => _AppStatusSnackBarState();
@@ -53,13 +67,23 @@ class _AppStatusSnackBarState extends State<_AppStatusSnackBar>
   void initState() {
     super.initState();
 
-    _controller = AnimationController(
-      vsync: this,
+    final DateTime now = DateTime.now();
+    final Duration remaining = widget.expiresAt.difference(now);
+    final double fraction = appStatusProgressFraction(
       duration: widget.duration,
-      value: 1,
+      expiresAt: widget.expiresAt,
+      now: now,
     );
 
-    _controller.reverse();
+    _controller = AnimationController(
+      vsync: this,
+      duration: remaining > Duration.zero ? remaining : Duration.zero,
+      value: fraction,
+    );
+
+    if (fraction > 0) {
+      _controller.reverse();
+    }
   }
 
   @override
@@ -171,6 +195,7 @@ class _AppStatusSnackBarState extends State<_AppStatusSnackBar>
               return Align(
                 alignment: Alignment.centerLeft,
                 child: FractionallySizedBox(
+                  key: const Key('app-status-progress'),
                   widthFactor: _controller.value,
                   child: Container(
                     height: 3,

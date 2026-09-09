@@ -11,6 +11,7 @@ import '../../services/translation_service.dart';
 import '../../widgets/app_pressable.dart';
 import '../../widgets/app_reveal.dart';
 import '../../widgets/app_scroll_header.dart';
+import '../../widgets/app_status_snackbar.dart';
 import 'widgets/subject_edit_panel.dart';
 import '../../services/horario_conflict_service.dart';
 import '../../services/time_format_service.dart';
@@ -417,19 +418,13 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
 
       HapticFeedback.heavyImpact();
 
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: const Color(0xFFB42318),
-            content: Text(
-              _espanol
-                  ? 'No pudimos eliminar la asignatura.'
-                  : 'We could not delete the subject.',
-            ),
-          ),
-        );
+      showAppStatusSnackBar(
+        context,
+        message: _espanol
+            ? 'No pudimos eliminar la asignatura.'
+            : 'We could not delete the subject.',
+        type: AppStatusType.error,
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -776,19 +771,13 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
 
       HapticFeedback.mediumImpact();
 
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: const Color(0xFF158A5B),
-            content: Text(
-              _espanol
-                  ? 'Asignatura guardada correctamente.'
-                  : 'Subject saved successfully.',
-            ),
-          ),
-        );
+      showAppStatusSnackBar(
+        context,
+        message: _espanol
+            ? 'Asignatura guardada correctamente.'
+            : 'Subject saved successfully.',
+        type: AppStatusType.success,
+      );
     } catch (_) {
       if (!mounted) {
         return;
@@ -796,19 +785,13 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
 
       HapticFeedback.heavyImpact();
 
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: const Color(0xFFB42318),
-            content: Text(
-              _espanol
-                  ? 'No pudimos guardar la asignatura. Inténtalo nuevamente.'
-                  : 'We could not save the subject. Please try again.',
-            ),
-          ),
-        );
+      showAppStatusSnackBar(
+        context,
+        message: _espanol
+            ? 'No pudimos guardar la asignatura. Inténtalo nuevamente.'
+            : 'We could not save the subject. Please try again.',
+        type: AppStatusType.error,
+      );
     } finally {
       if (mounted) {
         setState(() {

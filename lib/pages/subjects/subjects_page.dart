@@ -11,12 +11,20 @@ import '../../services/translation_service.dart';
 import '../../widgets/app_pressable.dart';
 import '../../widgets/app_reveal.dart';
 import '../../widgets/app_scroll_header.dart';
+import '../../widgets/app_status_snackbar.dart';
 import 'subject_detail_page.dart';
 
 import '../../widgets/app_swipe_delete.dart';
 
 class SubjectsPage extends StatefulWidget {
   const SubjectsPage({super.key});
+
+  static String? swipeTutorialKeyForUid(String? uid) {
+    final String cleanUid = uid?.trim() ?? '';
+    return cleanUid.isEmpty
+        ? null
+        : 'educflow-swipe-delete-subjects-v2-$cleanUid';
+  }
 
   @override
   State<SubjectsPage> createState() => _SubjectsPageState();
@@ -559,35 +567,25 @@ class _SubjectsPageState extends State<SubjectsPage> {
   void _importarMalla() {
     HapticFeedback.selectionClick();
 
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          content: Text(
-            _espanol
-                ? 'La importación de malla se conectará cuando migremos Gemini.'
-                : 'Curriculum import will be connected when Gemini is migrated.',
-          ),
-        ),
-      );
+    showAppStatusSnackBar(
+      context,
+      message: _espanol
+          ? 'La importación de malla se conectará cuando migremos Gemini.'
+          : 'Curriculum import will be connected when Gemini is migrated.',
+      type: AppStatusType.info,
+    );
   }
 
   void _importarHorario() {
     HapticFeedback.selectionClick();
 
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          content: Text(
-            _espanol
-                ? 'La importación de horario se conectará cuando migremos Gemini.'
-                : 'Schedule import will be connected when Gemini is migrated.',
-          ),
-        ),
-      );
+    showAppStatusSnackBar(
+      context,
+      message: _espanol
+          ? 'La importación de horario se conectará cuando migremos Gemini.'
+          : 'Schedule import will be connected when Gemini is migrated.',
+      type: AppStatusType.info,
+    );
   }
 
   Future<void> _abrirDetalle(Asignatura asignatura) async {
@@ -747,9 +745,7 @@ class _SubjectsPageState extends State<SubjectsPage> {
   }
 
   Future<void> _eliminarAsignatura(Asignatura asignatura) async {
-    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
-
-    messenger.hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
 
     showDialog<void>(
       context: context,
@@ -777,16 +773,12 @@ class _SubjectsPageState extends State<SubjectsPage> {
 
       HapticFeedback.mediumImpact();
 
-      messenger.showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: const Color(0xFF158A5B),
-          content: Text(
-            _espanol
-                ? 'Asignatura eliminada correctamente.'
-                : 'Subject deleted successfully.',
-          ),
-        ),
+      showAppStatusSnackBar(
+        context,
+        message: _espanol
+            ? 'Asignatura eliminada correctamente.'
+            : 'Subject deleted successfully.',
+        type: AppStatusType.success,
       );
     } catch (_) {
       if (!mounted) {
@@ -797,16 +789,12 @@ class _SubjectsPageState extends State<SubjectsPage> {
 
       HapticFeedback.heavyImpact();
 
-      messenger.showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: const Color(0xFFB42318),
-          content: Text(
-            _espanol
-                ? 'No pudimos eliminar la asignatura.'
-                : 'We could not delete the subject.',
-          ),
-        ),
+      showAppStatusSnackBar(
+        context,
+        message: _espanol
+            ? 'No pudimos eliminar la asignatura.'
+            : 'We could not delete the subject.',
+        type: AppStatusType.error,
       );
     }
   }
@@ -1132,7 +1120,9 @@ class _SubjectsPageState extends State<SubjectsPage> {
         ? (_espanol ? 'Agregada manualmente' : 'Added manually')
         : (_espanol ? 'Importada' : 'Imported');
 
-    final String? uid = _perfil?.uid;
+    final String? tutorialKey = SubjectsPage.swipeTutorialKeyForUid(
+      _authService.usuarioActual?.uid,
+    );
 
     return AppSwipeDelete(
       key: ValueKey('swipe-asignatura-${asignatura.id}'),
@@ -1141,9 +1131,7 @@ class _SubjectsPageState extends State<SubjectsPage> {
 
       deleteLabel: _espanol ? 'Eliminar' : 'Delete',
 
-      tutorialKey: showSwipeTutorial && uid != null
-          ? 'educflow-swipe-delete-subjects-v2-$uid'
-          : null,
+      tutorialKey: showSwipeTutorial ? tutorialKey : null,
 
       tutorialTitle: _espanol ? 'Elimina deslizando' : 'Swipe to delete',
 

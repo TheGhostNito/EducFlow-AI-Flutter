@@ -1,6 +1,30 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+abstract interface class SwipeTutorialPreferences {
+  Future<bool?> readSeen(String key);
+
+  Future<bool> writeSeen(String key);
+}
+
+class SharedPreferencesSwipeTutorialPreferences
+    implements SwipeTutorialPreferences {
+  SharedPreferencesSwipeTutorialPreferences({SharedPreferencesAsync? prefs})
+    : _prefs = prefs ?? SharedPreferencesAsync();
+
+  final SharedPreferencesAsync _prefs;
+
+  @override
+  Future<bool?> readSeen(String key) => _prefs.getBool(key);
+
+  @override
+  Future<bool> writeSeen(String key) async {
+    await _prefs.setBool(key, true);
+    return await _prefs.getBool(key) == true;
+  }
+}
 
 class AppSwipeDelete extends StatefulWidget {
   const AppSwipeDelete({
@@ -16,6 +40,7 @@ class AppSwipeDelete extends StatefulWidget {
     this.tutorialTitle,
     this.tutorialMessage,
     this.tutorialButtonLabel,
+    this.tutorialPreferences,
   });
 
   /// Tarjeta o contenido que se podrá deslizar.
@@ -39,6 +64,9 @@ class AppSwipeDelete extends StatefulWidget {
   final String? tutorialTitle;
   final String? tutorialMessage;
   final String? tutorialButtonLabel;
+
+  /// Permite sustituir el almacenamiento en pruebas.
+  final SwipeTutorialPreferences? tutorialPreferences;
 
   final double borderRadius;
 
@@ -153,9 +181,15 @@ class _AppSwipeDeleteState extends State<AppSwipeDelete>
       return;
     }
 
-    final SharedPreferences prefs = await SharedPreferences.getInstance();
-
-    final bool alreadySeen = prefs.getBool(tutorialKey) ?? false;
+    final SwipeTutorialPreferences preferences =
+        widget.tutorialPreferences ??
+        SharedPreferencesSwipeTutorialPreferences();
+    bool alreadySeen = false;
+    try {
+      alreadySeen = await preferences.readSeen(tutorialKey) ?? false;
+    } catch (error, stackTrace) {
+      _debugPersistenceFailure('leer', tutorialKey, error, stackTrace);
+    }
 
     if (alreadySeen || !mounted || _userInteracted) {
       return;
@@ -173,7 +207,24 @@ class _AppSwipeDeleteState extends State<AppSwipeDelete>
 
     final String? buttonLabel = widget.tutorialButtonLabel;
 
+    Future<void> persistSeen() async {
+      try {
+        final bool persisted = await preferences.writeSeen(tutorialKey);
+        if (!persisted) {
+          _debugPersistenceFailure(
+            'verificar',
+            tutorialKey,
+            StateError('La bandera no quedó guardada.'),
+            StackTrace.current,
+          );
+        }
+      } catch (error, stackTrace) {
+        _debugPersistenceFailure('guardar', tutorialKey, error, stackTrace);
+      }
+    }
+
     if (title != null && message != null && buttonLabel != null) {
+      bool saving = false;
       await showDialog<void>(
         context: context,
         barrierDismissible: false,
@@ -182,57 +233,66 @@ class _AppSwipeDeleteState extends State<AppSwipeDelete>
           final bool dark =
               Theme.of(dialogContext).brightness == Brightness.dark;
 
-          return AlertDialog(
-            backgroundColor: dark ? const Color(0xFF18181D) : Colors.white,
-            surfaceTintColor: Colors.transparent,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(22),
-            ),
-            icon: Container(
-              width: 58,
-              height: 58,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: const Color(0xFFB42318)
-                    .withValues(alpha: dark ? 0.18 : 0.10),
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: const Icon(
-                Icons.swipe_left_rounded,
-                color: Color(0xFFEF4444),
-                size: 30,
-              ),
-            ),
-            title: Text(title, textAlign: TextAlign.center),
-            content: Text(
-              message,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: dark ? const Color(0xFFA9B1BF) : const Color(0xFF6B7280),
-                height: 1.45,
-              ),
-            ),
-            actionsAlignment: MainAxisAlignment.center,
-            actions: [
-              FilledButton(
-                onPressed: () {
-                  HapticFeedback.selectionClick();
-
-                  Navigator.of(dialogContext).pop();
-                },
-                child: Text(buttonLabel),
-              ),
-            ],
+          return StatefulBuilder(
+            builder: (dialogContext, setDialogState) {
+              return AlertDialog(
+                backgroundColor: dark ? const Color(0xFF18181D) : Colors.white,
+                surfaceTintColor: Colors.transparent,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(22),
+                ),
+                icon: Container(
+                  width: 58,
+                  height: 58,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFB42318)
+                        .withValues(alpha: dark ? 0.18 : 0.10),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: const Icon(
+                    Icons.swipe_left_rounded,
+                    color: Color(0xFFEF4444),
+                    size: 30,
+                  ),
+                ),
+                title: Text(title, textAlign: TextAlign.center),
+                content: Text(
+                  message,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: dark
+                        ? const Color(0xFFA9B1BF)
+                        : const Color(0xFF6B7280),
+                    height: 1.45,
+                  ),
+                ),
+                actionsAlignment: MainAxisAlignment.center,
+                actions: [
+                  FilledButton(
+                    onPressed: saving
+                        ? null
+                        : () async {
+                            setDialogState(() => saving = true);
+                            HapticFeedback.selectionClick();
+                            await persistSeen();
+                            if (dialogContext.mounted) {
+                              Navigator.of(dialogContext).pop();
+                            }
+                          },
+                    child: Text(buttonLabel),
+                  ),
+                ],
+              );
+            },
           );
         },
       );
+    } else {
+      await persistSeen();
     }
 
-    if (!mounted) {
-      return;
-    }
-
-    await prefs.setBool(tutorialKey, true);
+    if (!mounted) return;
 
     // Después de cerrar el aviso,
     // mostramos físicamente cómo se hace.
@@ -262,6 +322,19 @@ class _AppSwipeDeleteState extends State<AppSwipeDelete>
     }
 
     await _animateTo(0, duration: const Duration(milliseconds: 420));
+  }
+
+  void _debugPersistenceFailure(
+    String operation,
+    String key,
+    Object error,
+    StackTrace stackTrace,
+  ) {
+    if (!kDebugMode) return;
+    debugPrint(
+      'AppSwipeDelete: no se pudo $operation la bandera del tutorial '
+      '"$key": $error\n$stackTrace',
+    );
   }
 
   // =========================================================

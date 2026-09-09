@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../core/navigation/main_navigation.dart';
@@ -11,6 +13,7 @@ import '../../services/asignaturas_service.dart';
 import '../../services/beta_notice_service.dart';
 import '../../services/evaluaciones_service.dart';
 import '../../services/home_preferences_service.dart';
+import '../../services/home_class_status_service.dart';
 import '../../services/perfil_service.dart';
 import '../../services/tareas_service.dart';
 import '../../services/translation_service.dart';
@@ -64,6 +67,9 @@ class _DashboardPageState extends State<DashboardPage>
   final HomePreferencesService _homePreferencesService =
       HomePreferencesService.instance;
 
+  final HomeClassStatusService _homeClassStatusService =
+      const HomeClassStatusService();
+
   final ScrollController _scrollController = ScrollController();
 
   double _progresoHeader = 0.0;
@@ -71,7 +77,7 @@ class _DashboardPageState extends State<DashboardPage>
   PerfilUsuario? _perfil;
 
   List<Asignatura> _asignaturas = [];
-  List<_ClaseDashboard> _clasesHoy = [];
+  List<HomeClassEntry> _clasesHoy = [];
   List<Tarea> _tareas = [];
   List<Evaluacion> _evaluaciones = [];
   AcademicInsight? _smartInsight;
@@ -87,6 +93,8 @@ class _DashboardPageState extends State<DashboardPage>
   HomePreferences _homePreferences = HomePreferences.defaults;
 
   int _versionAsignaturasCargada = -1;
+
+  Timer? _classStatusTimer;
 
   static const Color _primaryColor = Color(0xFF5B5FEF);
 
@@ -238,23 +246,8 @@ class _DashboardPageState extends State<DashboardPage>
     return 'Add the days and times of your subjects to organize your academic week.';
   }
 
-  _ClaseDashboard? get _proximaClase {
-    if (_clasesHoy.isEmpty) {
-      return null;
-    }
-
-    final DateTime ahora = DateTime.now();
-
-    final int minutosActuales = (ahora.hour * 60) + ahora.minute;
-
-    for (final _ClaseDashboard clase in _clasesHoy) {
-      if (_horaAMinutos(clase.horaInicio) >= minutosActuales) {
-        return clase;
-      }
-    }
-
-    return null;
-  }
+  HomeClassStatus get _classStatus =>
+      _homeClassStatusService.resolve(_clasesHoy, now: DateTime.now());
 
   // =========================================================
   // CICLO DE VIDA
@@ -278,6 +271,7 @@ class _DashboardPageState extends State<DashboardPage>
 
     _cargarDashboard();
     _cargarPreferenciasInicio();
+    _scheduleClassStatusRefresh();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _mostrarBienvenidaBeta();
@@ -286,6 +280,7 @@ class _DashboardPageState extends State<DashboardPage>
 
   @override
   void dispose() {
+    _classStatusTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _translationService.removeListener(_actualizarIdioma);
     _timeFormatService.removeListener(_actualizarFormatoHora);
@@ -300,8 +295,27 @@ class _DashboardPageState extends State<DashboardPage>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      _scheduleClassStatusRefresh();
       _cargarContenido(forzar: true, silencioso: true);
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      _classStatusTimer?.cancel();
     }
+  }
+
+  void _scheduleClassStatusRefresh() {
+    _classStatusTimer?.cancel();
+    final DateTime now = DateTime.now();
+    final int millisecondsUntilNextMinute =
+        60000 - (now.second * 1000 + now.millisecond);
+    _classStatusTimer = Timer(
+      Duration(milliseconds: millisecondsUntilNextMinute),
+      () {
+        if (!mounted) return;
+        setState(_generarClasesDeHoy);
+        _scheduleClassStatusRefresh();
+      },
+    );
   }
 
   Future<void> _mostrarBienvenidaBeta() async {
@@ -324,7 +338,7 @@ class _DashboardPageState extends State<DashboardPage>
 
   void _actualizarIdioma() {
     if (mounted) {
-      setState(() {});
+      setState(_generarClasesDeHoy);
     }
   }
 
@@ -532,90 +546,12 @@ class _DashboardPageState extends State<DashboardPage>
   // =========================================================
 
   void _generarClasesDeHoy() {
-    final DiaSemana? diaActual = _diaSemanaActual();
-
-    if (diaActual == null) {
-      _clasesHoy = [];
-
-      return;
-    }
-
-    final List<_ClaseDashboard> clases = [];
-
-    for (final Asignatura asignatura in _asignaturas) {
-      for (final BloqueHorario bloque in asignatura.horario) {
-        if (bloque.dia != diaActual) {
-          continue;
-        }
-
-        final String salaBloque = bloque.sala?.trim() ?? '';
-
-        final String salaAsignatura = asignatura.sala?.trim() ?? '';
-
-        final String sala = salaBloque.isNotEmpty ? salaBloque : salaAsignatura;
-
-        final String profesor = asignatura.profesor?.trim() ?? '';
-
-        clases.add(
-          _ClaseDashboard(
-            asignaturaId: asignatura.id,
-            nombre: asignatura.nombre,
-            sala: sala.isNotEmpty ? sala : (_espanol ? 'Sin sala' : 'No room'),
-            profesor: profesor.isNotEmpty
-                ? profesor
-                : (_espanol ? 'Sin profesor' : 'No teacher'),
-            horaInicio: bloque.horaInicio,
-            horaFin: bloque.horaFin,
-          ),
-        );
-      }
-    }
-
-    clases.sort((a, b) => a.horaInicio.compareTo(b.horaInicio));
-
-    _clasesHoy = clases;
-  }
-
-  DiaSemana? _diaSemanaActual() {
-    switch (DateTime.now().weekday) {
-      case DateTime.monday:
-        return DiaSemana.lunes;
-
-      case DateTime.tuesday:
-        return DiaSemana.martes;
-
-      case DateTime.wednesday:
-        return DiaSemana.miercoles;
-
-      case DateTime.thursday:
-        return DiaSemana.jueves;
-
-      case DateTime.friday:
-        return DiaSemana.viernes;
-
-      case DateTime.saturday:
-        return DiaSemana.sabado;
-
-      case DateTime.sunday:
-        return null;
-
-      default:
-        return null;
-    }
-  }
-
-  int _horaAMinutos(String hora) {
-    final List<String> partes = hora.split(':');
-
-    if (partes.length < 2) {
-      return 0;
-    }
-
-    final int horas = int.tryParse(partes[0]) ?? 0;
-
-    final int minutos = int.tryParse(partes[1]) ?? 0;
-
-    return (horas * 60) + minutos;
+    _clasesHoy = _homeClassStatusService.classesForDay(
+      _asignaturas,
+      date: DateTime.now(),
+      missingRoomLabel: _espanol ? 'Sin sala' : 'No room',
+      missingTeacherLabel: _espanol ? 'Sin profesor' : 'No teacher',
+    );
   }
 
   String _mostrarHora(String hora) {
@@ -1784,7 +1720,7 @@ class _DashboardPageState extends State<DashboardPage>
   // =========================================================
 
   Widget _buildSummarySection(bool oscuro, double ancho) {
-    final _ClaseDashboard? proxima = _proximaClase;
+    final HomeClassStatus classStatus = _classStatus;
 
     final List<Widget> tarjetas = [
       AppReveal(
@@ -1816,43 +1752,138 @@ class _DashboardPageState extends State<DashboardPage>
         ),
       ),
 
-      AppReveal(
-        delay: const Duration(milliseconds: 100),
-        child: _buildSummaryCard(
-          oscuro: oscuro,
-          icon: Icons.alarm_outlined,
-          iconColor: const Color(0xFF059669),
-          label: _espanol ? 'PRÓXIMA CLASE' : 'NEXT CLASS',
-          value: proxima == null ? '—' : _mostrarHora(proxima.horaInicio),
-          description:
-              proxima?.nombre ??
-              (_espanol
-                  ? 'Sin clases pendientes hoy'
-                  : 'No remaining classes today'),
+      if (classStatus.currentClass != null)
+        AppReveal(
+          delay: const Duration(milliseconds: 100),
+          child: _buildClassStatusCard(
+            key: const Key('current-class-card'),
+            oscuro: oscuro,
+            label: _espanol ? 'CLASE EN CURSO' : 'CURRENT CLASS',
+            clase: classStatus.currentClass!,
+            icon: Icons.play_circle_outline_rounded,
+            iconColor: const Color(0xFFDC2626),
+          ),
         ),
-      ),
+      if (classStatus.nextClass != null)
+        AppReveal(
+          delay: const Duration(milliseconds: 150),
+          child: _buildClassStatusCard(
+            key: const Key('next-class-card'),
+            oscuro: oscuro,
+            label: _espanol ? 'PRÓXIMA CLASE' : 'NEXT CLASS',
+            clase: classStatus.nextClass!,
+            icon: Icons.alarm_outlined,
+            iconColor: const Color(0xFF059669),
+          ),
+        ),
+      if (classStatus.currentClass == null && classStatus.nextClass == null)
+        AppReveal(
+          delay: const Duration(milliseconds: 100),
+          child: _buildSummaryCard(
+            oscuro: oscuro,
+            icon: Icons.alarm_outlined,
+            iconColor: const Color(0xFF059669),
+            label: _espanol ? 'PRÓXIMA CLASE' : 'NEXT CLASS',
+            value: '—',
+            description: _espanol
+                ? 'Sin clases pendientes hoy'
+                : 'No remaining classes today',
+          ),
+        ),
     ];
 
     if (ancho > 960) {
       return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(child: tarjetas[0]),
-          const SizedBox(width: 18),
-          Expanded(child: tarjetas[1]),
-          const SizedBox(width: 18),
-          Expanded(child: tarjetas[2]),
+          for (int index = 0; index < tarjetas.length; index++) ...[
+            if (index > 0) const SizedBox(width: 18),
+            Expanded(child: tarjetas[index]),
+          ],
         ],
       );
     }
 
     return Column(
       children: [
-        tarjetas[0],
-        const SizedBox(height: 13),
-        tarjetas[1],
-        const SizedBox(height: 13),
-        tarjetas[2],
+        for (int index = 0; index < tarjetas.length; index++) ...[
+          if (index > 0) const SizedBox(height: 13),
+          tarjetas[index],
+        ],
       ],
+    );
+  }
+
+  Widget _buildClassStatusCard({
+    required Key key,
+    required bool oscuro,
+    required String label,
+    required HomeClassEntry clase,
+    required IconData icon,
+    required Color iconColor,
+  }) {
+    return _buildSimpleCard(
+      key: key,
+      oscuro: oscuro,
+      radius: 18,
+      padding: 18,
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: iconColor.withValues(alpha: oscuro ? 0.16 : 0.10),
+              borderRadius: BorderRadius.circular(15),
+            ),
+            child: Icon(icon, color: iconColor, size: 23),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: oscuro
+                        ? const Color(0xFF8993A2)
+                        : const Color(0xFF6B7280),
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.6,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  clase.nombre,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: oscuro
+                        ? const Color(0xFFF8FAFC)
+                        : const Color(0xFF111827),
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '${_mostrarHora(clase.horaInicio)}–${_mostrarHora(clase.horaFin)} · ${clase.sala}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: oscuro
+                        ? const Color(0xFFA9B1BF)
+                        : const Color(0xFF6B7280),
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -2400,7 +2431,7 @@ class _DashboardPageState extends State<DashboardPage>
     );
   }
 
-  Widget _buildClassItem(_ClaseDashboard clase, bool oscuro) {
+  Widget _buildClassItem(HomeClassEntry clase, bool oscuro) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 15),
       decoration: BoxDecoration(
@@ -2735,33 +2766,6 @@ class _DashboardPageState extends State<DashboardPage>
       child: child,
     );
   }
-}
-
-// ===========================================================
-// CLASE DASHBOARD
-// ===========================================================
-
-class _ClaseDashboard {
-  const _ClaseDashboard({
-    required this.asignaturaId,
-    required this.nombre,
-    required this.sala,
-    required this.profesor,
-    required this.horaInicio,
-    required this.horaFin,
-  });
-
-  final String asignaturaId;
-
-  final String nombre;
-
-  final String sala;
-
-  final String profesor;
-
-  final String horaInicio;
-
-  final String horaFin;
 }
 
 // ===========================================================
