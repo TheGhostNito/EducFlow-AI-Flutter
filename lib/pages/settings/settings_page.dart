@@ -8,6 +8,7 @@ import '../../services/translation_service.dart';
 import '../../widgets/app_pressable.dart';
 import '../../widgets/app_reveal.dart';
 import '../../widgets/app_scroll_header.dart';
+import '../../widgets/app_status_snackbar.dart';
 import '../../services/time_format_service.dart';
 import 'notification_preferences_page.dart';
 import 'home_customization_page.dart';
@@ -154,8 +155,11 @@ class _SettingsPageState extends State<SettingsPage>
 
   Future<void> _cambiarTema(bool enabled) async {
     HapticFeedback.selectionClick();
-
-    await _themeService.setDarkMode(enabled);
+    try {
+      await _themeService.setDarkMode(enabled);
+    } catch (_) {
+      _mostrarErrorPreferencia();
+    }
   }
 
   // =========================================================
@@ -165,7 +169,11 @@ class _SettingsPageState extends State<SettingsPage>
   Future<void> _cambiarIdioma(AppLanguage language) async {
     HapticFeedback.selectionClick();
 
-    await _translationService.changeLanguage(language);
+    try {
+      await _translationService.changeLanguage(language);
+    } catch (_) {
+      _mostrarErrorPreferencia();
+    }
   }
 
   String _nombreIdioma(AppLanguage language) {
@@ -185,7 +193,22 @@ class _SettingsPageState extends State<SettingsPage>
   Future<void> _cambiarFormatoHora(TimeFormatPreference preference) async {
     HapticFeedback.selectionClick();
 
-    await _timeFormatService.setPreference(preference);
+    try {
+      await _timeFormatService.setPreference(preference);
+    } catch (_) {
+      _mostrarErrorPreferencia();
+    }
+  }
+
+  void _mostrarErrorPreferencia() {
+    if (!mounted) return;
+    showAppStatusSnackBar(
+      context,
+      message: _espanol
+          ? 'No pudimos guardar la preferencia. Restauramos el valor anterior.'
+          : 'We could not save the preference. The previous value was restored.',
+      type: AppStatusType.error,
+    );
   }
 
   String _nombreFormatoHora(TimeFormatPreference preference) {

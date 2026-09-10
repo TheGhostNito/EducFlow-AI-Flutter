@@ -17,10 +17,22 @@ import '../../services/translation_service.dart';
 import '../../widgets/app_pressable.dart';
 import '../../widgets/app_status_snackbar.dart';
 import '../../widgets/beta_notice_dialog.dart';
+import '../../core/auth/session_controller.dart';
 import 'ai_chat_history_page.dart';
 
 class AiChatPage extends StatefulWidget {
-  const AiChatPage({super.key});
+  const AiChatPage({
+    super.key,
+    this.sessionController,
+    this.betaNoticeService,
+    this.betaDialogPresenter,
+    this.initialConversationLoadOverride,
+  });
+
+  final SessionController? sessionController;
+  final BetaNoticeCoordinator? betaNoticeService;
+  final BetaNoticeDialogPresenter? betaDialogPresenter;
+  final Future<void> Function()? initialConversationLoadOverride;
 
   @override
   State<AiChatPage> createState() => _AiChatPageState();
@@ -29,9 +41,10 @@ class AiChatPage extends StatefulWidget {
 class _AiChatPageState extends State<AiChatPage> {
   static const Color _primaryColor = Color(0xFF5B5FEF);
 
-  final AiService _aiService = AiService.instance;
-  final AiChatHistoryService _historyService = AiChatHistoryService.instance;
-  final BetaNoticeService _betaNoticeService = BetaNoticeService.instance;
+  AiService get _aiService => AiService.instance;
+  AiChatHistoryService get _historyService => AiChatHistoryService.instance;
+  late final BetaNoticeCoordinator _betaNoticeService;
+  late final SessionController _sessionController;
   final TranslationService _translationService = TranslationService.instance;
 
   final TextEditingController _messageController = TextEditingController();
@@ -45,6 +58,9 @@ class _AiChatPageState extends State<AiChatPage> {
   AiConversation? _conversation;
   bool _loadingConversation = true;
   bool _sending = false;
+  bool _betaDialogInProgress = false;
+  bool _betaDialogInvalidated = false;
+  GlobalKey? _betaDialogKey;
 
   bool get _spanish => _translationService.isSpanish;
 
@@ -52,18 +68,18 @@ class _AiChatPageState extends State<AiChatPage> {
   void initState() {
     super.initState();
 
+    _sessionController = widget.sessionController ?? SessionController.instance;
+    _betaNoticeService = widget.betaNoticeService ?? BetaNoticeService.instance;
+
     _translationService.addListener(_refreshLanguage);
     _focusNode.addListener(_refreshFocus);
 
     _loadInitialConversation();
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _mostrarAvisoBetaIA();
-    });
   }
 
   @override
   void dispose() {
+    _invalidateBetaDialog();
     final String? conversationId = _conversation?.id;
 
     if (conversationId != null) {
@@ -81,22 +97,92 @@ class _AiChatPageState extends State<AiChatPage> {
   }
 
   Future<void> _mostrarAvisoBetaIA() async {
-    final bool mostrar = await _betaNoticeService.shouldShow(BetaNoticeKind.ai);
-
-    if (!mounted || !mostrar) {
+    final session = _sessionController;
+    final ticket = session.captureTicket();
+    if (!mounted ||
+        ticket == null ||
+        _loadingConversation ||
+        _betaDialogInProgress ||
+        ModalRoute.of(context)?.isCurrent != true) {
       return;
     }
 
-    await showBetaNoticeDialog(
-      context,
-      spanish: _spanish,
-      kind: BetaNoticeKind.ai,
-    );
+    BetaNoticeReservation? reservation;
+    VoidCallback? sessionListener;
+    try {
+      reservation = await _betaNoticeService.reserveIfShouldShow(
+        ticket.uid,
+        BetaNoticeKind.ai,
+      );
+      if (reservation == null ||
+          !mounted ||
+          !session.isCurrentTicket(ticket) ||
+          ModalRoute.of(context)?.isCurrent != true) {
+        return;
+      }
 
-    await _betaNoticeService.markShown(BetaNoticeKind.ai);
+      _betaDialogInProgress = true;
+      _betaDialogInvalidated = false;
+      _betaDialogKey = GlobalKey();
+      sessionListener = () {
+        if (!session.isCurrentTicket(ticket)) _invalidateBetaDialog();
+      };
+      session.addListener(sessionListener);
+
+      await (widget.betaDialogPresenter ?? showBetaNoticeDialog)(
+        context,
+        spanish: _spanish,
+        kind: BetaNoticeKind.ai,
+        dialogKey: _betaDialogKey,
+        onInvalidated: () => _betaDialogInvalidated = true,
+      );
+
+      bool remainsValid() {
+        return mounted &&
+            !_betaDialogInvalidated &&
+            session.isCurrentTicket(ticket) &&
+            ModalRoute.of(context)?.isCurrent == true;
+      }
+
+      if (!remainsValid()) return;
+      await _betaNoticeService.markShown(reservation, isValid: remainsValid);
+    } catch (error) {
+      debugPrint('No se pudo completar el aviso Beta de IA: $error');
+    } finally {
+      if (sessionListener != null) session.removeListener(sessionListener);
+      if (reservation != null) _betaNoticeService.release(reservation);
+      _betaDialogInProgress = false;
+      _betaDialogKey = null;
+    }
+  }
+
+  void _invalidateBetaDialog() {
+    _betaDialogInvalidated = true;
+    final dialogContext = _betaDialogKey?.currentContext;
+    final route = dialogContext == null ? null : ModalRoute.of(dialogContext);
+    if (route == null || !route.isActive) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (route.isActive) route.navigator?.removeRoute(route);
+    });
   }
 
   Future<void> _loadInitialConversation() async {
+    final override = widget.initialConversationLoadOverride;
+    if (override != null) {
+      try {
+        await override();
+      } catch (_) {
+        // El override solo permite aislar la carga inicial en pruebas.
+      } finally {
+        if (mounted) {
+          setState(() => _loadingConversation = false);
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _mostrarAvisoBetaIA();
+          });
+        }
+      }
+      return;
+    }
     try {
       final AiConversation? conversation = await _historyService
           .getConversationToResume();
@@ -160,6 +246,9 @@ class _AiChatPageState extends State<AiChatPage> {
       if (mounted) {
         setState(() {
           _loadingConversation = false;
+        });
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _mostrarAvisoBetaIA();
         });
       }
     }

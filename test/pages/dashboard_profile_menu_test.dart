@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:eduflow_ai/pages/dashboard/dashboard_page.dart';
 import 'package:eduflow_ai/services/translation_service.dart';
+import 'package:eduflow_ai/services/perfil_service.dart';
 import 'package:eduflow_ai/widgets/app_scroll_header.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -14,6 +15,10 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   const uid = 'dashboard-menu-test';
   late TranslationService language;
+  final perfilService = PerfilService(
+    dataSource: _PerfilDashboardDataSource(uid),
+    isSessionCurrent: () => true,
+  );
 
   setUpAll(() async {
     await FirebaseAuthTestHost().initialize(initialUid: uid);
@@ -95,7 +100,7 @@ void main() {
                     brightness: dark ? Brightness.dark : Brightness.light,
                     fontFamily: 'Roboto',
                   ),
-                  home: const DashboardPage(),
+                  home: DashboardPage(perfilService: perfilService),
                 ),
               );
               // MainBottomNav contiene una animación continua.
@@ -174,5 +179,40 @@ void main() {
         );
       }
     }
+  }
+}
+
+class _PerfilDashboardDataSource implements PerfilDataSource {
+  _PerfilDashboardDataSource(this.uid);
+
+  final String uid;
+
+  @override
+  Future<void> actualizar(String uid, Map<String, dynamic> values) async {}
+
+  @override
+  Future<void> insertarSiFalta(Map<String, dynamic> values) async {}
+
+  @override
+  Future<Map<String, dynamic>?> obtener(String requestedUid) async {
+    if (requestedUid != uid) return null;
+    return {
+      'uid': uid,
+      'nombre': 'Estudiante',
+      'correo_principal': 'estudiante@example.com',
+      'correo_institucional': '',
+      'nivel_educativo': null,
+      'nombre_establecimiento': '',
+      'tipo_establecimiento': '',
+      'curso_actual': '',
+      'carrera': '',
+      'semestre_actual': null,
+      'anio_ingreso': null,
+      'sede': '',
+      'jornada': '',
+      'estado_academico': '',
+      'idioma': 'es',
+      'perfil_completo': false,
+    };
   }
 }

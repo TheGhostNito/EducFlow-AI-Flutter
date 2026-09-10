@@ -82,9 +82,12 @@ class EducFlowApp extends StatelessWidget {
                     : const Color(0xFFF5F7FB))
               : null,
           debugShowCheckedModeBanner: false,
-          builder: (context, child) => WebAppFrame(
-            dark: ThemeService.instance.isDarkMode,
-            child: child!,
+          builder: (context, child) => AutofillGroup(
+            onDisposeAction: AutofillContextAction.cancel,
+            child: WebAppFrame(
+              dark: ThemeService.instance.isDarkMode,
+              child: child!,
+            ),
           ),
 
           locale: TranslationService.instance.isSpanish

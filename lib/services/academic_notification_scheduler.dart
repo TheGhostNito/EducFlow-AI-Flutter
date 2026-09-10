@@ -1,9 +1,9 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
+import '../core/auth/session_controller.dart';
 import '../models/asignatura.dart';
 import '../models/evaluacion.dart';
 import '../models/tarea.dart';
@@ -14,31 +14,142 @@ import 'tareas_service.dart';
 import 'translation_service.dart';
 import 'user_preferences_service.dart';
 
+@immutable
+class AcademicPendingNotification {
+  const AcademicPendingNotification({required this.id, this.payload});
+
+  final int id;
+  final String? payload;
+}
+
+@immutable
+class AcademicNotificationRequest {
+  const AcademicNotificationRequest({
+    required this.id,
+    required this.title,
+    required this.body,
+    required this.dateTime,
+    required this.type,
+    required this.payload,
+  });
+
+  final int id;
+  final String title;
+  final String body;
+  final DateTime dateTime;
+  final TipoNotificacionLocal type;
+  final String payload;
+}
+
 class AcademicNotificationScheduler {
-  AcademicNotificationScheduler._();
+  factory AcademicNotificationScheduler._() {
+    final notificationService = NotificationService.instance;
+    return AcademicNotificationScheduler._internal(
+      sessionController: SessionController.instance,
+      firestore: FirebaseFirestore.instance,
+      translationService: TranslationService.instance,
+      isSpanish: () => TranslationService.instance.isSpanish,
+      loadPreferences: () => UserPreferencesService.instance
+          .getCurrentPreferences(forceRefresh: true),
+      notificationState: notificationService.obtenerEstado,
+      loadSubjects: AsignaturasService.instance.obtenerTodas,
+      loadTasks: TareasService.instance.obtenerTodas,
+      loadEvaluations: EvaluacionesService.instance.obtenerTodas,
+      loadPendingNotifications: () async {
+        final pending = await notificationService.obtenerProgramadas();
+        return pending
+            .map(
+              (item) => AcademicPendingNotification(
+                id: item.id,
+                payload: item.payload,
+              ),
+            )
+            .toList();
+      },
+      cancelNotification: notificationService.cancelarNotificacion,
+      scheduleNotification: (request) async {
+        await notificationService.programarNotificacion(
+          id: request.id,
+          titulo: request.title,
+          cuerpo: request.body,
+          fechaHora: request.dateTime,
+          tipo: request.type,
+          payload: request.payload,
+        );
+      },
+    );
+  }
+
+  AcademicNotificationScheduler._internal({
+    required this._sessionController,
+    required this._firestore,
+    required this._translationService,
+    required this._isSpanish,
+    required this._loadPreferences,
+    required this._notificationState,
+    required this._loadSubjects,
+    required this._loadTasks,
+    required this._loadEvaluations,
+    required this._loadPendingNotifications,
+    required this._cancelNotification,
+    required this._scheduleNotification,
+    this.syncDelay = const Duration(milliseconds: 250),
+  });
+
+  @visibleForTesting
+  factory AcademicNotificationScheduler.forTesting({
+    required SessionController sessionController,
+    required Future<List<AcademicPendingNotification>> Function()
+    loadPendingNotifications,
+    required Future<void> Function(int id) cancelNotification,
+    required Future<void> Function(AcademicNotificationRequest request)
+    scheduleNotification,
+    Future<UserPreferences> Function()? loadPreferences,
+    Future<EstadoNotificaciones> Function()? notificationState,
+    Future<List<Asignatura>> Function()? loadSubjects,
+    Future<List<Tarea>> Function()? loadTasks,
+    Future<List<Evaluacion>> Function()? loadEvaluations,
+    Duration syncDelay = const Duration(days: 1),
+  }) {
+    return AcademicNotificationScheduler._internal(
+      sessionController: sessionController,
+      firestore: null,
+      translationService: null,
+      isSpanish: () => true,
+      loadPreferences: loadPreferences ?? () async => UserPreferences.defaults,
+      notificationState:
+          notificationState ?? () async => EstadoNotificaciones.activadas,
+      loadSubjects: loadSubjects ?? () async => const [],
+      loadTasks: loadTasks ?? () async => const [],
+      loadEvaluations: loadEvaluations ?? () async => const [],
+      loadPendingNotifications: loadPendingNotifications,
+      cancelNotification: cancelNotification,
+      scheduleNotification: scheduleNotification,
+      syncDelay: syncDelay,
+    );
+  }
 
   static final AcademicNotificationScheduler instance =
       AcademicNotificationScheduler._();
 
   static const String _payloadPrefix = 'academic|';
 
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final SessionController _sessionController;
+  final FirebaseFirestore? _firestore;
+  final TranslationService? _translationService;
+  final bool Function() _isSpanish;
+  final Future<UserPreferences> Function() _loadPreferences;
+  final Future<EstadoNotificaciones> Function() _notificationState;
+  final Future<List<Asignatura>> Function() _loadSubjects;
+  final Future<List<Tarea>> Function() _loadTasks;
+  final Future<List<Evaluacion>> Function() _loadEvaluations;
+  final Future<List<AcademicPendingNotification>> Function()
+  _loadPendingNotifications;
+  final Future<void> Function(int id) _cancelNotification;
+  final Future<void> Function(AcademicNotificationRequest request)
+  _scheduleNotification;
+  final Duration syncDelay;
 
-  final NotificationService _notificationService = NotificationService.instance;
-
-  final AsignaturasService _asignaturasService = AsignaturasService.instance;
-
-  final TareasService _tareasService = TareasService.instance;
-
-  final EvaluacionesService _evaluacionesService = EvaluacionesService.instance;
-
-  final TranslationService _translationService = TranslationService.instance;
-
-  final UserPreferencesService _preferencesService =
-      UserPreferencesService.instance;
-
-  StreamSubscription<User?>? _authSubscription;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
   _preferencesSubscription;
 
@@ -48,8 +159,9 @@ class AcademicNotificationScheduler {
   Timer? _debounce;
 
   bool _started = false;
-  bool _syncing = false;
-  bool _syncPending = false;
+  bool _hasWatchedSession = false;
+  SessionTicket? _watchedTicket;
+  Future<void> _notificationWork = Future<void>.value();
 
   static const int _classHorizonDays = 14;
 
@@ -64,18 +176,24 @@ class AcademicNotificationScheduler {
 
     _started = true;
 
-    _authSubscription = _auth.authStateChanges().listen(_watchUser);
+    _translationService?.addListener(_onLanguageChanged);
+    _sessionController.addListener(_onSessionChanged);
+    _onSessionChanged();
+  }
 
-    _translationService.addListener(_onLanguageChanged);
-
-    _watchUser(_auth.currentUser);
+  void _onSessionChanged() {
+    final ticket = _sessionController.captureTicket();
+    if (_hasWatchedSession && _sameTicket(_watchedTicket, ticket)) return;
+    _hasWatchedSession = true;
+    _watchedTicket = ticket;
+    _watchUser(ticket);
   }
 
   void _onLanguageChanged() {
     _scheduleSync();
   }
 
-  void _watchUser(User? user) {
+  void _watchUser(SessionTicket? ticket) {
     _debounce?.cancel();
 
     unawaited(_preferencesSubscription?.cancel());
@@ -87,14 +205,20 @@ class AcademicNotificationScheduler {
 
     _dataSubscriptions.clear();
 
-    if (user == null) {
-      unawaited(_cancelAcademicPending());
+    if (ticket == null) {
+      unawaited(_enqueueNotificationWork(_cancelAcademicPending));
       return;
     }
 
-    final DocumentReference<Map<String, dynamic>> userRef = _firestore
+    final firestore = _firestore;
+    if (firestore == null) {
+      _scheduleSync();
+      return;
+    }
+
+    final DocumentReference<Map<String, dynamic>> userRef = firestore
         .collection('usuarios')
-        .doc(user.uid);
+        .doc(ticket.uid);
 
     _preferencesSubscription = userRef.snapshots().listen((_) {
       _scheduleSync();
@@ -124,7 +248,7 @@ class AcademicNotificationScheduler {
   void _scheduleSync() {
     _debounce?.cancel();
 
-    _debounce = Timer(const Duration(milliseconds: 250), () {
+    _debounce = Timer(syncDelay, () {
       unawaited(syncNow());
     });
   }
@@ -134,48 +258,47 @@ class AcademicNotificationScheduler {
   // =========================================================
 
   Future<void> syncNow() async {
-    final bool spanish = _translationService.isSpanish;
-    final User? user = _auth.currentUser;
-
-    if (user == null) {
-      await _cancelAcademicPending();
-      return;
+    final ticket = _sessionController.captureTicket();
+    if (ticket == null) {
+      return _enqueueNotificationWork(_cancelAcademicPending);
     }
+
+    return _enqueueNotificationWork(() => _syncTicket(ticket));
+  }
+
+  Future<void> _syncTicket(SessionTicket ticket) async {
+    bool isValid() => _sessionController.isCurrentTicket(ticket);
+    if (!isValid()) return;
 
     if (kIsWeb) {
       return;
     }
 
-    if (_syncing) {
-      _syncPending = true;
-      return;
-    }
-
-    _syncing = true;
-
     try {
-      final UserPreferences userPreferences = await _preferencesService
-          .getCurrentPreferences(forceRefresh: true);
+      final bool spanish = _isSpanish();
+      final UserPreferences userPreferences = await _loadPreferences();
+      if (!isValid()) return;
 
       final NotificationPreferences preferences = userPreferences.notifications;
 
       if (!preferences.enabled) {
-        await _cancelAcademicPending();
+        await _cancelAcademicPending(isValid: isValid);
         return;
       }
 
-      final EstadoNotificaciones estado = await _notificationService
-          .obtenerEstado();
+      final EstadoNotificaciones estado = await _notificationState();
+      if (!isValid()) return;
 
       if (estado != EstadoNotificaciones.activadas) {
         return;
       }
 
       final List<dynamic> resultados = await Future.wait([
-        _asignaturasService.obtenerTodas(),
-        _tareasService.obtenerTodas(),
-        _evaluacionesService.obtenerTodas(),
+        _loadSubjects(),
+        _loadTasks(),
+        _loadEvaluations(),
       ]);
+      if (!isValid()) return;
 
       final List<Asignatura> asignaturas = resultados[0] as List<Asignatura>;
 
@@ -186,7 +309,8 @@ class AcademicNotificationScheduler {
       // Primero limpiamos solo las notificaciones académicas
       // creadas por este scheduler. Las generales/pruebas no
       // se tocan.
-      await _cancelAcademicPending();
+      await _cancelAcademicPending(isValid: isValid);
+      if (!isValid()) return;
 
       final DateTime now = DateTime.now();
 
@@ -196,6 +320,7 @@ class AcademicNotificationScheduler {
           now: now,
           spanish: spanish,
           leadMinutes: preferences.classLeadMinutes,
+          isValid: isValid,
         );
       }
 
@@ -211,6 +336,7 @@ class AcademicNotificationScheduler {
           spanish: spanish,
           reminderHour: taskClock.hour,
           reminderMinute: taskClock.minute,
+          isValid: isValid,
         );
       }
 
@@ -226,6 +352,7 @@ class AcademicNotificationScheduler {
           spanish: spanish,
           reminderHour: evaluationClock.hour,
           reminderMinute: evaluationClock.minute,
+          isValid: isValid,
         );
       }
     } catch (error) {
@@ -233,13 +360,6 @@ class AcademicNotificationScheduler {
         'No se pudieron sincronizar las notificaciones '
         'académicas: $error',
       );
-    } finally {
-      _syncing = false;
-
-      if (_syncPending) {
-        _syncPending = false;
-        unawaited(syncNow());
-      }
     }
   }
 
@@ -252,6 +372,7 @@ class AcademicNotificationScheduler {
     required DateTime now,
     required bool spanish,
     required int leadMinutes,
+    required bool Function() isValid,
   }) async {
     final DateTime today = DateTime(now.year, now.month, now.day);
 
@@ -318,16 +439,20 @@ class AcademicNotificationScheduler {
           final String key =
               'class|${subject.id}|${_dateKey(date)}|$blockIndex';
 
-          await _notificationService.programarNotificacion(
-            id: _stableNotificationId(key),
-            titulo: spanish
-                ? 'Tu clase comienza pronto'
-                : 'Your class starts soon',
-            cuerpo: body,
-            fechaHora: reminder,
-            tipo: TipoNotificacionLocal.clase,
-            payload: '$_payloadPrefix$key|${block.horaInicio}',
+          if (!isValid()) return;
+          await _scheduleNotification(
+            AcademicNotificationRequest(
+              id: _stableNotificationId(key),
+              title: spanish
+                  ? 'Tu clase comienza pronto'
+                  : 'Your class starts soon',
+              body: body,
+              dateTime: reminder,
+              type: TipoNotificacionLocal.clase,
+              payload: '$_payloadPrefix$key|${block.horaInicio}',
+            ),
           );
+          if (!isValid()) return;
         }
       }
     }
@@ -344,6 +469,7 @@ class AcademicNotificationScheduler {
     required bool spanish,
     required int reminderHour,
     required int reminderMinute,
+    required bool Function() isValid,
   }) async {
     for (final Tarea task in tareas) {
       if (task.completada) {
@@ -387,14 +513,18 @@ class AcademicNotificationScheduler {
 
       final String key = 'task|${task.id}';
 
-      await _notificationService.programarNotificacion(
-        id: _stableNotificationId(key),
-        titulo: spanish ? 'Tarea para mañana' : 'Task due tomorrow',
-        cuerpo: body,
-        fechaHora: reminder,
-        tipo: TipoNotificacionLocal.tarea,
-        payload: '$_payloadPrefix$key',
+      if (!isValid()) return;
+      await _scheduleNotification(
+        AcademicNotificationRequest(
+          id: _stableNotificationId(key),
+          title: spanish ? 'Tarea para mañana' : 'Task due tomorrow',
+          body: body,
+          dateTime: reminder,
+          type: TipoNotificacionLocal.tarea,
+          payload: '$_payloadPrefix$key',
+        ),
       );
+      if (!isValid()) return;
     }
   }
 
@@ -409,6 +539,7 @@ class AcademicNotificationScheduler {
     required bool spanish,
     required int reminderHour,
     required int reminderMinute,
+    required bool Function() isValid,
   }) async {
     for (final Evaluacion evaluation in evaluaciones) {
       final DateTime date = DateTime(
@@ -441,14 +572,18 @@ class AcademicNotificationScheduler {
 
       final String key = 'evaluation|${evaluation.id}';
 
-      await _notificationService.programarNotificacion(
-        id: _stableNotificationId(key),
-        titulo: spanish ? 'Evaluación mañana' : 'Evaluation tomorrow',
-        cuerpo: body,
-        fechaHora: reminder,
-        tipo: TipoNotificacionLocal.evaluacion,
-        payload: '$_payloadPrefix$key',
+      if (!isValid()) return;
+      await _scheduleNotification(
+        AcademicNotificationRequest(
+          id: _stableNotificationId(key),
+          title: spanish ? 'Evaluación mañana' : 'Evaluation tomorrow',
+          body: body,
+          dateTime: reminder,
+          type: TipoNotificacionLocal.evaluacion,
+          payload: '$_payloadPrefix$key',
+        ),
       );
+      if (!isValid()) return;
     }
   }
 
@@ -456,9 +591,10 @@ class AcademicNotificationScheduler {
   // LIMPIEZA
   // =========================================================
 
-  Future<void> _cancelAcademicPending() async {
+  Future<void> _cancelAcademicPending({bool Function()? isValid}) async {
     try {
-      final pendientes = await _notificationService.obtenerProgramadas();
+      final pendientes = await _loadPendingNotifications();
+      if (isValid != null && !isValid()) return;
 
       for (final pending in pendientes) {
         final String payload = pending.payload ?? '';
@@ -467,7 +603,9 @@ class AcademicNotificationScheduler {
           continue;
         }
 
-        await _notificationService.cancelarNotificacion(pending.id);
+        if (isValid != null && !isValid()) return;
+        await _cancelNotification(pending.id);
+        if (isValid != null && !isValid()) return;
       }
     } catch (error) {
       debugPrint(
@@ -480,6 +618,26 @@ class AcademicNotificationScheduler {
   // =========================================================
   // HELPERS
   // =========================================================
+
+  bool _sameTicket(SessionTicket? left, SessionTicket? right) {
+    if (left == null || right == null) {
+      return left == null && right == null;
+    }
+    return left.uid == right.uid && left.generation == right.generation;
+  }
+
+  Future<void> _enqueueNotificationWork(Future<void> Function() operation) {
+    final result = _notificationWork.then((_) => operation());
+    _notificationWork = result.catchError((Object error, StackTrace stack) {
+      debugPrint(
+        'Falló una operación serializada de notificaciones académicas: $error',
+      );
+    });
+    return result;
+  }
+
+  @visibleForTesting
+  Future<void> waitForIdle() => _notificationWork;
 
   DiaSemana? _modelWeekday(int weekday) {
     switch (weekday) {
@@ -605,9 +763,9 @@ class AcademicNotificationScheduler {
   Future<void> dispose() async {
     _debounce?.cancel();
 
-    _translationService.removeListener(_onLanguageChanged);
+    _translationService?.removeListener(_onLanguageChanged);
 
-    await _authSubscription?.cancel();
+    _sessionController.removeListener(_onSessionChanged);
     await _preferencesSubscription?.cancel();
 
     for (final subscription in _dataSubscriptions) {
@@ -616,6 +774,10 @@ class AcademicNotificationScheduler {
 
     _dataSubscriptions.clear();
 
+    await _notificationWork;
+
+    _hasWatchedSession = false;
+    _watchedTicket = null;
     _started = false;
   }
 }

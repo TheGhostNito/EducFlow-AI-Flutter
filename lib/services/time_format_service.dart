@@ -6,12 +6,22 @@ import 'user_preferences_service.dart';
 enum TimeFormatPreference { system, h24, h12 }
 
 class TimeFormatService extends ChangeNotifier with WidgetsBindingObserver {
-  TimeFormatService._();
+  TimeFormatService._() : _persistTimeFormat = _persistProductionTimeFormat;
+
+  @visibleForTesting
+  TimeFormatService.forTesting(
+    Future<void> Function(String timeFormat) persistTimeFormat,
+  ) : _persistTimeFormat = persistTimeFormat;
 
   static final TimeFormatService instance = TimeFormatService._();
 
-  final UserPreferencesService _userPreferencesService =
+  UserPreferencesService get _userPreferencesService =>
       UserPreferencesService.instance;
+  final Future<void> Function(String timeFormat) _persistTimeFormat;
+
+  static Future<void> _persistProductionTimeFormat(String timeFormat) {
+    return UserPreferencesService.instance.setTimeFormat(timeFormat);
+  }
 
   static const MethodChannel _channel = MethodChannel('educflow/time_format');
 
@@ -20,6 +30,8 @@ class TimeFormatService extends ChangeNotifier with WidgetsBindingObserver {
   bool _systemUses24Hours = false;
 
   bool _observerRegistrado = false;
+  bool _savingPreference = false;
+  int _stateVersion = 0;
 
   TimeFormatPreference get preference => _preference;
 
@@ -68,20 +80,23 @@ class TimeFormatService extends ChangeNotifier with WidgetsBindingObserver {
     final UserPreferences preferences = await _userPreferencesService
         .getPreferencesForUser(uid, forceRefresh: forceRefresh);
 
-    final TimeFormatPreference newPreference = switch (preferences.timeFormat) {
+    applyUserPreference(preferences.timeFormat, notify: notify);
+  }
+
+  void applyUserPreference(String timeFormat, {bool notify = true}) {
+    final TimeFormatPreference newPreference = switch (timeFormat) {
       '24h' => TimeFormatPreference.h24,
       '12h' => TimeFormatPreference.h12,
       _ => TimeFormatPreference.system,
     };
-
     final bool changed = _preference != newPreference;
-
+    _stateVersion += 1;
+    _savingPreference = false;
     _preference = newPreference;
-
     if (_preference == TimeFormatPreference.system) {
-      await _actualizarFormatoSistema(notificar: false);
+      _systemUses24Hours =
+          WidgetsBinding.instance.platformDispatcher.alwaysUse24HourFormat;
     }
-
     if (notify && changed) {
       notifyListeners();
     }
@@ -92,7 +107,13 @@ class TimeFormatService extends ChangeNotifier with WidgetsBindingObserver {
   // =========================================================
 
   Future<void> setPreference(TimeFormatPreference preference) async {
-    final bool changed = _preference != preference;
+    if (_preference == preference || _savingPreference) {
+      return;
+    }
+
+    final TimeFormatPreference previousPreference = _preference;
+    _savingPreference = true;
+    final int operationVersion = ++_stateVersion;
 
     _preference = preference;
 
@@ -100,9 +121,7 @@ class TimeFormatService extends ChangeNotifier with WidgetsBindingObserver {
       await _actualizarFormatoSistema(notificar: false);
     }
 
-    if (changed || preference == TimeFormatPreference.system) {
-      notifyListeners();
-    }
+    notifyListeners();
 
     final String value = switch (preference) {
       TimeFormatPreference.system => 'system',
@@ -110,7 +129,22 @@ class TimeFormatService extends ChangeNotifier with WidgetsBindingObserver {
       TimeFormatPreference.h12 => '12h',
     };
 
-    await _userPreferencesService.setTimeFormat(value);
+    try {
+      await _persistTimeFormat(value);
+    } catch (_) {
+      if (_stateVersion == operationVersion) {
+        _preference = previousPreference;
+        if (_preference == TimeFormatPreference.system) {
+          await _actualizarFormatoSistema(notificar: false);
+        }
+        notifyListeners();
+      }
+      rethrow;
+    } finally {
+      if (_stateVersion == operationVersion) {
+        _savingPreference = false;
+      }
+    }
   }
 
   // =========================================================
@@ -221,6 +255,8 @@ class TimeFormatService extends ChangeNotifier with WidgetsBindingObserver {
   // =========================================================
 
   Future<void> resetForSignedOutUser() async {
+    _stateVersion += 1;
+    _savingPreference = false;
     final bool changed = _preference != TimeFormatPreference.system;
 
     _preference = TimeFormatPreference.system;

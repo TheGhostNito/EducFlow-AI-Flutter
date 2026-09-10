@@ -12,6 +12,7 @@ import '../../widgets/app_pressable.dart';
 import '../../widgets/app_reveal.dart';
 import '../../widgets/app_scroll_header.dart';
 import '../../widgets/app_swipe_delete.dart';
+import '../../widgets/app_status_snackbar.dart';
 import 'widgets/task_edit_sheet.dart';
 import 'widgets/task_detail_sheet.dart';
 
@@ -232,19 +233,12 @@ class _TasksPageState extends State<TasksPage> {
 
       HapticFeedback.mediumImpact();
 
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: const Color(0xFF158A5B),
-            content: Text(
-              _espanol
-                  ? 'Tarea creada correctamente.'
-                  : 'Task created successfully.',
-            ),
-          ),
-        );
+      showAppStatusSnackBar(
+        context,
+        message: _espanol
+            ? 'Tarea creada correctamente.'
+            : 'Task created successfully.',
+      );
     } catch (_) {
       if (!mounted) {
         return;
@@ -252,19 +246,13 @@ class _TasksPageState extends State<TasksPage> {
 
       HapticFeedback.heavyImpact();
 
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: const Color(0xFFB42318),
-            content: Text(
-              _espanol
-                  ? 'No pudimos crear la tarea.'
-                  : 'We could not create the task.',
-            ),
-          ),
-        );
+      showAppStatusSnackBar(
+        context,
+        message: _espanol
+            ? 'No pudimos crear la tarea.'
+            : 'We could not create the task.',
+        type: AppStatusType.error,
+      );
     }
   }
 
@@ -340,19 +328,12 @@ class _TasksPageState extends State<TasksPage> {
 
       HapticFeedback.mediumImpact();
 
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: const Color(0xFF158A5B),
-            content: Text(
-              _espanol
-                  ? 'Tarea actualizada correctamente.'
-                  : 'Task updated successfully.',
-            ),
-          ),
-        );
+      showAppStatusSnackBar(
+        context,
+        message: _espanol
+            ? 'Tarea actualizada correctamente.'
+            : 'Task updated successfully.',
+      );
     } catch (_) {
       if (!mounted) {
         return;
@@ -360,19 +341,13 @@ class _TasksPageState extends State<TasksPage> {
 
       HapticFeedback.heavyImpact();
 
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: const Color(0xFFB42318),
-            content: Text(
-              _espanol
-                  ? 'No pudimos actualizar la tarea.'
-                  : 'We could not update the task.',
-            ),
-          ),
-        );
+      showAppStatusSnackBar(
+        context,
+        message: _espanol
+            ? 'No pudimos actualizar la tarea.'
+            : 'We could not update the task.',
+        type: AppStatusType.error,
+      );
     }
   }
 
@@ -450,15 +425,10 @@ class _TasksPageState extends State<TasksPage> {
 
       HapticFeedback.mediumImpact();
 
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: const Color(0xFF158A5B),
-            content: Text(_espanol ? 'Tarea eliminada.' : 'Task deleted.'),
-          ),
-        );
+      showAppStatusSnackBar(
+        context,
+        message: _espanol ? 'Tarea eliminada.' : 'Task deleted.',
+      );
     } catch (_) {
       if (!mounted) {
         return;
@@ -472,19 +442,13 @@ class _TasksPageState extends State<TasksPage> {
 
       HapticFeedback.heavyImpact();
 
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: const Color(0xFFB42318),
-            content: Text(
-              _espanol
-                  ? 'No pudimos eliminar la tarea.'
-                  : 'We could not delete the task.',
-            ),
-          ),
-        );
+      showAppStatusSnackBar(
+        context,
+        message: _espanol
+            ? 'No pudimos eliminar la tarea.'
+            : 'We could not delete the task.',
+        type: AppStatusType.error,
+      );
     }
   }
 
@@ -527,19 +491,13 @@ class _TasksPageState extends State<TasksPage> {
         return;
       }
 
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: const Color(0xFFB42318),
-            content: Text(
-              _espanol
-                  ? 'No pudimos actualizar la tarea.'
-                  : 'We could not update the task.',
-            ),
-          ),
-        );
+      showAppStatusSnackBar(
+        context,
+        message: _espanol
+            ? 'No pudimos actualizar la tarea.'
+            : 'We could not update the task.',
+        type: AppStatusType.error,
+      );
     } finally {
       if (mounted) {
         setState(() {

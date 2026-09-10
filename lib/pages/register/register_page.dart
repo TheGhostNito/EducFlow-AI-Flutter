@@ -2,24 +2,45 @@ import 'dart:async';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/auth/auth_service.dart';
+import '../../core/auth/session_controller.dart';
 import '../../services/translation_service.dart';
+import '../../services/theme_service.dart';
 import '../../services/validacion_contrasena.dart';
 import '../../widgets/app_animated_visibility.dart';
 import '../../widgets/auth_feedback.dart';
 import '../../widgets/language_selector.dart';
 import '../../widgets/theme_toggle_button.dart';
 
+typedef RegisterAction = Future<void> Function(
+  String name,
+  String email,
+  String password,
+  String language,
+);
+
 class RegisterPage extends StatefulWidget {
-  const RegisterPage({super.key});
+  const RegisterPage({
+    super.key,
+    this.sessionController,
+    this.registerAction,
+    this.autofillFinisher,
+  });
+
+  final SessionController? sessionController;
+  final RegisterAction? registerAction;
+  final void Function(bool shouldSave)? autofillFinisher;
 
   @override
   State<RegisterPage> createState() => _RegisterPageState();
 }
 
 class _RegisterPageState extends State<RegisterPage> {
-  final AuthService _authService = AuthService();
+  AuthService? _authServiceCache;
+  AuthService get _authService => _authServiceCache ??= AuthService();
+  late final SessionController _sessionController;
 
   final TranslationService _translationService = TranslationService.instance;
 
@@ -41,6 +62,8 @@ class _RegisterPageState extends State<RegisterPage> {
   bool _mostrarConfirmacion = false;
   bool _cargando = false;
   bool _requisitosOcultos = false;
+  bool _autofillFinished = false;
+  bool _closingAfterReady = false;
   Timer? _ocultarRequisitosTimer;
   String _ultimaContrasena = '';
   String _ultimaConfirmacion = '';
@@ -79,6 +102,8 @@ class _RegisterPageState extends State<RegisterPage> {
   void initState() {
     super.initState();
 
+    _sessionController = widget.sessionController ?? SessionController.instance;
+
     _translationService.addListener(_actualizarIdioma);
 
     _nombreFocusNode.addListener(_actualizarFoco);
@@ -107,6 +132,7 @@ class _RegisterPageState extends State<RegisterPage> {
   void _actualizarCampos() {
     if (mounted) {
       setState(() {
+        _autofillFinished = false;
         _errorMessage = '';
       });
     }
@@ -124,6 +150,7 @@ class _RegisterPageState extends State<RegisterPage> {
     _ultimaConfirmacion = confirmacion;
     _ocultarRequisitosTimer?.cancel();
     setState(() {
+      _autofillFinished = false;
       _errorMessage = '';
       _requisitosOcultos = false;
     });
@@ -140,6 +167,9 @@ class _RegisterPageState extends State<RegisterPage> {
 
   @override
   void dispose() {
+    // También cubre Atrás del sistema o un pop externo. Si el registro llegó
+    // a ready, el guard evita emitir un segundo cierre después del commit.
+    _finishAutofillContext(shouldSave: false);
     _ocultarRequisitosTimer?.cancel();
     _contrasenaController.removeListener(_actualizarContrasenas);
     _confirmarContrasenaController.removeListener(_actualizarContrasenas);
@@ -308,21 +338,47 @@ class _RegisterPageState extends State<RegisterPage> {
     });
 
     try {
-      await _authService.registrar(
-        nombre: nombre,
-        correo: correo,
-        contrasena: contrasena,
-        idioma: _espanol ? 'es' : 'en',
+      final language = _espanol ? 'es' : 'en';
+      await _sessionController.authenticate(
+        onPreparationResult: (ready) {
+          _finishAutofillContext(shouldSave: ready);
+        },
+        registration: RegistrationSessionData(
+          name: nombre,
+          email: correo,
+          language: language,
+          theme: ThemeService.instance.isDarkMode ? 'dark' : 'light',
+        ),
+        operation: () async {
+          final action = widget.registerAction;
+          if (action != null) {
+            await action(nombre, correo, contrasena, language);
+            return;
+          }
+          await _authService.registrar(
+            nombre: nombre,
+            correo: correo,
+            contrasena: contrasena,
+            idioma: language,
+          );
+        },
       );
 
-      if (!mounted) {
-        return;
+      if (_sessionController.isReady) {
+        _finishAutofillContext(shouldSave: true);
+        if (!mounted || _closingAfterReady) {
+          return;
+        }
+        _closingAfterReady = true;
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      } else {
+        _finishAutofillContext(shouldSave: false);
+        if (mounted && _sessionController.status == SessionStatus.error) {
+          Navigator.of(context).popUntil((route) => route.isFirst);
+        }
       }
-
-      // Registro sí es una ruta secundaria: se cierra para revelar la única
-      // raíz, cuyo AuthGate ya reacciona a la nueva sesión.
-      Navigator.of(context).popUntil((route) => route.isFirst);
     } on FirebaseAuthException catch (error) {
+      _finishAutofillContext(shouldSave: false);
       if (!mounted) {
         return;
       }
@@ -372,6 +428,7 @@ class _RegisterPageState extends State<RegisterPage> {
         }
       });
     } catch (_) {
+      _finishAutofillContext(shouldSave: false);
       if (!mounted) {
         return;
       }
@@ -395,7 +452,26 @@ class _RegisterPageState extends State<RegisterPage> {
       return;
     }
 
+    _finishAutofillContext(shouldSave: false);
     Navigator.of(context).pop();
+  }
+
+  void _finishAutofillContext({required bool shouldSave}) {
+    if (_autofillFinished) {
+      return;
+    }
+    _autofillFinished = true;
+    final finisher = widget.autofillFinisher;
+    if (finisher != null) {
+      finisher(shouldSave);
+      return;
+    }
+    unawaited(
+      SystemChannels.textInput.invokeMethod<void>(
+        'TextInput.finishAutofillContext',
+        shouldSave,
+      ),
+    );
   }
 
   // =========================================================
@@ -652,6 +728,7 @@ class _RegisterPageState extends State<RegisterPage> {
               onChanged: (_) {
                 _actualizarCampos();
               },
+              onSubmitted: (_) => _correoFocusNode.requestFocus(),
               decoration: _inputDecoration(
                 hintText: _espanol ? 'Tu nombre' : 'Your name',
                 icon: Icons.person_outline,
@@ -683,12 +760,16 @@ class _RegisterPageState extends State<RegisterPage> {
               enabled: !_cargando,
               keyboardType: TextInputType.emailAddress,
               textInputAction: TextInputAction.next,
-              autofillHints: const [AutofillHints.email],
+              autofillHints: const [
+                AutofillHints.username,
+                AutofillHints.email,
+              ],
               cursorColor: _primaryColor,
               style: _inputTextStyle(oscuro),
               onChanged: (_) {
                 _actualizarCampos();
               },
+              onSubmitted: (_) => _contrasenaFocusNode.requestFocus(),
               decoration: _inputDecoration(
                 hintText: 'correo@ejemplo.com',
                 icon: Icons.mail_outline,
@@ -722,6 +803,7 @@ class _RegisterPageState extends State<RegisterPage> {
               autofillHints: const [AutofillHints.newPassword],
               cursorColor: _primaryColor,
               style: _inputTextStyle(oscuro),
+              onSubmitted: (_) => _confirmarContrasenaFocusNode.requestFocus(),
               decoration: _inputDecoration(
                 hintText: _espanol
                     ? 'Crea tu contraseña'

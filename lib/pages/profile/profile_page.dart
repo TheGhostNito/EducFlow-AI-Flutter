@@ -9,6 +9,7 @@ import '../../services/translation_service.dart';
 import '../../widgets/app_pressable.dart';
 import '../../widgets/app_reveal.dart';
 import '../../widgets/app_scroll_header.dart';
+import '../../widgets/app_status_snackbar.dart';
 import 'widgets/profile_education_level_sheet.dart';
 import 'widgets/profile_edit_panel.dart';
 
@@ -412,25 +413,19 @@ class _ProfilePageState extends State<ProfilePage> {
 
       HapticFeedback.mediumImpact();
 
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: nombreAuthSincronizado
-                ? const Color(0xFF158A5B)
-                : const Color(0xFFB7791F),
-            content: Text(
-              nombreAuthSincronizado
-                  ? (_espanol
-                        ? 'Perfil actualizado correctamente.'
-                        : 'Profile updated successfully.')
-                  : (_espanol
-                        ? 'Perfil guardado. El nombre de la cuenta se sincronizará más adelante.'
-                        : 'Profile saved. The account name will sync later.'),
-            ),
-          ),
-        );
+      showAppStatusSnackBar(
+        context,
+        message: nombreAuthSincronizado
+            ? (_espanol
+                  ? 'Perfil actualizado correctamente.'
+                  : 'Profile updated successfully.')
+            : (_espanol
+                  ? 'Perfil guardado. El nombre de la cuenta se sincronizará más adelante.'
+                  : 'Profile saved. The account name will sync later.'),
+        type: nombreAuthSincronizado
+            ? AppStatusType.success
+            : AppStatusType.warning,
+      );
     } catch (_) {
       if (!mounted) {
         return;
@@ -438,19 +433,13 @@ class _ProfilePageState extends State<ProfilePage> {
 
       HapticFeedback.heavyImpact();
 
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: const Color(0xFFB42318),
-            content: Text(
-              _espanol
-                  ? 'No pudimos guardar los cambios. Inténtalo nuevamente.'
-                  : 'We could not save your changes. Please try again.',
-            ),
-          ),
-        );
+      showAppStatusSnackBar(
+        context,
+        message: _espanol
+            ? 'No pudimos guardar los cambios. Inténtalo nuevamente.'
+            : 'We could not save your changes. Please try again.',
+        type: AppStatusType.error,
+      );
     } finally {
       if (mounted) {
         setState(() {
