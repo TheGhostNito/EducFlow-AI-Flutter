@@ -1,64 +1,179 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart'
+    show Supabase, SupabaseClient;
 
 import '../models/perfil_usuario.dart';
 
+abstract interface class PerfilDataSource {
+  Future<Map<String, dynamic>?> obtener(String uid);
+  Future<void> insertarSiFalta(Map<String, dynamic> values);
+  Future<void> actualizar(String uid, Map<String, dynamic> values);
+}
+
+class SupabasePerfilDataSource implements PerfilDataSource {
+  SupabasePerfilDataSource(this._supabase);
+
+  final SupabaseClient _supabase;
+
+  @override
+  Future<Map<String, dynamic>?> obtener(String uid) async {
+    final resultado = await _supabase
+        .from('usuarios')
+        .select('''
+          uid,
+          nombre,
+          correo_principal,
+          correo_institucional,
+          nivel_educativo,
+          nombre_establecimiento,
+          tipo_establecimiento,
+          curso_actual,
+          carrera,
+          semestre_actual,
+          anio_ingreso,
+          sede,
+          jornada,
+          estado_academico,
+          idioma,
+          perfil_completo
+          ''')
+        .eq('uid', uid)
+        .maybeSingle();
+    return resultado == null ? null : Map<String, dynamic>.from(resultado);
+  }
+
+  @override
+  Future<void> insertarSiFalta(Map<String, dynamic> values) async {
+    await _supabase
+        .from('usuarios')
+        .upsert(values, onConflict: 'uid', ignoreDuplicates: true);
+  }
+
+  @override
+  Future<void> actualizar(String uid, Map<String, dynamic> values) async {
+    await _supabase.from('usuarios').update(values).eq('uid', uid);
+  }
+}
+
 class PerfilService {
-  PerfilService({FirebaseFirestore? firestore})
-    : _firestore = firestore ?? FirebaseFirestore.instance;
+  PerfilService({
+    SupabaseClient? supabase,
+    this.firebaseAuth,
+    PerfilDataSource? dataSource,
+    this.isSessionCurrent,
+  }) : _dataSource =
+           dataSource ??
+           SupabasePerfilDataSource(supabase ?? Supabase.instance.client);
 
-  final FirebaseFirestore _firestore;
+  final PerfilDataSource _dataSource;
+  final FirebaseAuth? firebaseAuth;
+  final bool Function()? isSessionCurrent;
+  final Map<String, Future<PerfilUsuario>> _pendingInitialProfiles = {};
 
   // =========================================================
-  // CREAR PERFIL INICIAL
+  // VALIDAR USUARIO ACTUAL
   // =========================================================
 
-  Future<void> crearPerfilInicial({
+  void _validarUsuario(String uid) {
+    final validSession = isSessionCurrent;
+    if (validSession != null && !validSession()) {
+      throw StateError(
+        'La operación de perfil fue invalidada por un cambio de sesión.',
+      );
+    }
+    if (validSession != null) {
+      return;
+    }
+
+    final usuarioActual = (firebaseAuth ?? FirebaseAuth.instance).currentUser;
+
+    if (usuarioActual == null || usuarioActual.uid != uid) {
+      throw StateError(
+        'La operación de perfil no corresponde al usuario autenticado.',
+      );
+    }
+  }
+
+  // =========================================================
+  // ASEGURAR PERFIL INICIAL
+  // =========================================================
+
+  Future<PerfilUsuario> asegurarPerfilInicial({
     required String uid,
     required String nombre,
     required String correoPrincipal,
     required String idioma,
   }) async {
-    final DocumentReference<Map<String, dynamic>> referencia = _firestore
-        .collection('usuarios')
-        .doc(uid);
+    final existingPending = _pendingInitialProfiles[uid];
+    if (existingPending != null) {
+      return existingPending;
+    }
 
-    await referencia.set({
+    final future = _asegurarPerfilInicial(
+      uid: uid,
+      nombre: nombre,
+      correoPrincipal: correoPrincipal,
+      idioma: idioma,
+    );
+    _pendingInitialProfiles[uid] = future;
+    try {
+      return await future;
+    } finally {
+      if (identical(_pendingInitialProfiles[uid], future)) {
+        _pendingInitialProfiles.remove(uid);
+      }
+    }
+  }
+
+  Future<PerfilUsuario> _asegurarPerfilInicial({
+    required String uid,
+    required String nombre,
+    required String correoPrincipal,
+    required String idioma,
+  }) async {
+    _validarUsuario(uid);
+
+    final existente = await obtenerPerfil(uid);
+    if (existente != null) {
+      return existente;
+    }
+
+    final correo = correoPrincipal.trim().toLowerCase();
+    if (correo.isEmpty) {
+      throw StateError('No existe un correo seguro para crear el perfil.');
+    }
+
+    final nombreSeguro = nombre.trim().isNotEmpty
+        ? nombre.trim()
+        : correo.split('@').first;
+
+    // Esta validación inmediata es deliberada: una lectura lenta no puede
+    // terminar creando el perfil de un UID que ya dejó de ser la sesión.
+    _validarUsuario(uid);
+    await _dataSource.insertarSiFalta({
       'uid': uid,
-
-      'nombre': nombre.trim(),
-
-      'correoPrincipal': correoPrincipal.trim().toLowerCase(),
-
-      'correoInstitucional': '',
-
-      'nivelEducativo': '',
-
-      'nombreEstablecimiento': '',
-
-      'tipoEstablecimiento': '',
-
-      'cursoActual': '',
-
+      'nombre': nombreSeguro,
+      'correo_principal': correo,
+      'correo_institucional': '',
+      'nivel_educativo': null,
+      'nombre_establecimiento': '',
+      'tipo_establecimiento': '',
+      'curso_actual': '',
       'carrera': '',
-
-      'semestreActual': null,
-
-      'anioIngreso': null,
-
+      'semestre_actual': null,
+      'anio_ingreso': null,
       'sede': '',
-
       'jornada': '',
-
-      'estadoAcademico': '',
-
+      'estado_academico': '',
       'idioma': idioma == 'en' ? 'en' : 'es',
-
-      'perfilCompleto': false,
-
-      'fechaCreacion': FieldValue.serverTimestamp(),
-
-      'fechaActualizacion': FieldValue.serverTimestamp(),
+      'perfil_completo': false,
     });
+
+    final creado = await obtenerPerfil(uid);
+    if (creado == null) {
+      throw StateError('No fue posible asegurar el perfil del usuario.');
+    }
+    return creado;
   }
 
   // =========================================================
@@ -66,24 +181,32 @@ class PerfilService {
   // =========================================================
 
   Future<PerfilUsuario?> obtenerPerfil(String uid) async {
-    final DocumentReference<Map<String, dynamic>> referencia = _firestore
-        .collection('usuarios')
-        .doc(uid);
+    _validarUsuario(uid);
 
-    final DocumentSnapshot<Map<String, dynamic>> resultado = await referencia
-        .get();
+    final resultado = await _dataSource.obtener(uid);
 
-    if (!resultado.exists) {
+    if (resultado == null) {
       return null;
     }
 
-    final Map<String, dynamic>? data = resultado.data();
-
-    if (data == null) {
-      return null;
-    }
-
-    return PerfilUsuario.fromMap(data, uidFallback: resultado.id);
+    return PerfilUsuario.fromMap({
+      'uid': resultado['uid'],
+      'nombre': resultado['nombre'],
+      'correoPrincipal': resultado['correo_principal'],
+      'correoInstitucional': resultado['correo_institucional'],
+      'nivelEducativo': resultado['nivel_educativo'],
+      'nombreEstablecimiento': resultado['nombre_establecimiento'],
+      'tipoEstablecimiento': resultado['tipo_establecimiento'],
+      'cursoActual': resultado['curso_actual'],
+      'carrera': resultado['carrera'],
+      'semestreActual': resultado['semestre_actual'],
+      'anioIngreso': resultado['anio_ingreso'],
+      'sede': resultado['sede'],
+      'jornada': resultado['jornada'],
+      'estadoAcademico': resultado['estado_academico'],
+      'idioma': resultado['idioma'],
+      'perfilCompleto': resultado['perfil_completo'],
+    }, uidFallback: uid);
   }
 
   // =========================================================
@@ -94,9 +217,7 @@ class PerfilService {
     String uid,
     ActualizarPerfilUsuario datos,
   ) async {
-    final DocumentReference<Map<String, dynamic>> referencia = _firestore
-        .collection('usuarios')
-        .doc(uid);
+    _validarUsuario(uid);
 
     final String nombre = datos.nombre.trim();
 
@@ -128,36 +249,24 @@ class PerfilService {
       anioIngreso: datos.anioIngreso,
     );
 
-    await referencia.update({
+    await _dataSource.actualizar(uid, {
       'nombre': nombre,
-
-      'correoInstitucional': correoInstitucional,
-
-      'nivelEducativo': datos.nivelEducativo.valorFirestore,
-
-      'nombreEstablecimiento': nombreEstablecimiento,
-
-      'tipoEstablecimiento': tipoEstablecimiento,
-
-      'cursoActual': cursoActual,
-
+      'correo_institucional': correoInstitucional,
+      'nivel_educativo': datos.nivelEducativo == NivelEducativoPerfil.vacio
+          ? null
+          : datos.nivelEducativo.valorFirestore,
+      'nombre_establecimiento': nombreEstablecimiento,
+      'tipo_establecimiento': tipoEstablecimiento,
+      'curso_actual': cursoActual,
       'carrera': carrera,
-
-      'semestreActual': datos.semestreActual,
-
-      'anioIngreso': datos.anioIngreso,
-
+      'semestre_actual': datos.semestreActual,
+      'anio_ingreso': datos.anioIngreso,
       'sede': sede,
-
       'jornada': jornada,
-
-      'estadoAcademico': estadoAcademico,
-
+      'estado_academico': estadoAcademico,
       'idioma': datos.idioma == 'en' ? 'en' : 'es',
-
-      'perfilCompleto': perfilCompleto,
-
-      'fechaActualizacion': FieldValue.serverTimestamp(),
+      'perfil_completo': perfilCompleto,
+      'fecha_actualizacion': DateTime.now().toUtc().toIso8601String(),
     });
   }
 

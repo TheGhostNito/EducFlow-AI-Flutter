@@ -17,7 +17,6 @@ import '../../services/home_class_status_service.dart';
 import '../../services/perfil_service.dart';
 import '../../services/tareas_service.dart';
 import '../../services/translation_service.dart';
-import '../login/login_page.dart';
 import '../../widgets/main_bottom_nav.dart';
 import '../../widgets/main_section_scroll.dart';
 import '../../widgets/app_reveal.dart';
@@ -26,6 +25,7 @@ import '../../widgets/app_status_snackbar.dart';
 import '../profile/profile_page.dart';
 import '../settings/settings_page.dart';
 import '../settings/home_customization_page.dart';
+import '../grades/grades_page.dart';
 import '../subjects/subjects_page.dart';
 import '../../services/time_format_service.dart';
 import '../tasks/tasks_page.dart';
@@ -35,9 +35,23 @@ import 'package:flutter/services.dart';
 
 import '../../widgets/app_pressable.dart';
 import '../../widgets/beta_notice_dialog.dart';
+import '../../core/auth/session_controller.dart';
 
 class DashboardPage extends StatefulWidget {
-  const DashboardPage({super.key});
+  const DashboardPage({
+    super.key,
+    this.perfilService,
+    this.sessionController,
+    this.betaNoticeService,
+    this.betaDialogPresenter,
+    this.initialLoadOverride,
+  });
+
+  final PerfilService? perfilService;
+  final SessionController? sessionController;
+  final BetaNoticeCoordinator? betaNoticeService;
+  final BetaNoticeDialogPresenter? betaDialogPresenter;
+  final Future<void> Function()? initialLoadOverride;
 
   @override
   State<DashboardPage> createState() => _DashboardPageState();
@@ -47,7 +61,8 @@ class _DashboardPageState extends State<DashboardPage>
     with WidgetsBindingObserver {
   final AuthService _authService = AuthService();
 
-  final PerfilService _perfilService = PerfilService();
+  PerfilService? _perfilService;
+  late final SessionController _sessionController;
 
   final AsignaturasService _asignaturasService = AsignaturasService.instance;
 
@@ -62,7 +77,7 @@ class _DashboardPageState extends State<DashboardPage>
 
   final TimeFormatService _timeFormatService = TimeFormatService.instance;
 
-  final BetaNoticeService _betaNoticeService = BetaNoticeService.instance;
+  late final BetaNoticeCoordinator _betaNoticeService;
 
   final HomePreferencesService _homePreferencesService =
       HomePreferencesService.instance;
@@ -87,6 +102,11 @@ class _DashboardPageState extends State<DashboardPage>
 
   bool _cargandoContenido = true;
   bool _errorContenido = false;
+  bool _homePreferencesLoaded = false;
+  bool _errorHomePreferences = false;
+  bool _betaDialogInProgress = false;
+  bool _betaDialogInvalidated = false;
+  GlobalKey? _betaDialogKey;
 
   bool _cerrandoSesion = false;
 
@@ -261,6 +281,10 @@ class _DashboardPageState extends State<DashboardPage>
   void initState() {
     super.initState();
 
+    _perfilService = widget.perfilService;
+    _sessionController = widget.sessionController ?? SessionController.instance;
+    _betaNoticeService = widget.betaNoticeService ?? BetaNoticeService.instance;
+
     WidgetsBinding.instance.addObserver(this);
 
     _translationService.addListener(_actualizarIdioma);
@@ -269,17 +293,13 @@ class _DashboardPageState extends State<DashboardPage>
 
     _scrollController.addListener(_escucharScroll);
 
-    _cargarDashboard();
-    _cargarPreferenciasInicio();
+    _cargarInicio();
     _scheduleClassStatusRefresh();
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _mostrarBienvenidaBeta();
-    });
   }
 
   @override
   void dispose() {
+    _invalidateBetaDialog();
     _classStatusTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _translationService.removeListener(_actualizarIdioma);
@@ -319,21 +339,78 @@ class _DashboardPageState extends State<DashboardPage>
   }
 
   Future<void> _mostrarBienvenidaBeta() async {
-    final bool mostrar = await _betaNoticeService.shouldShow(
-      BetaNoticeKind.welcome,
-    );
-
-    if (!mounted || !mostrar) {
+    final session = _sessionController;
+    final ticket = session.captureTicket();
+    if (!mounted ||
+        ticket == null ||
+        _cargandoPerfil ||
+        _cargandoContenido ||
+        !_homePreferencesLoaded ||
+        _errorPerfil ||
+        _errorContenido ||
+        _errorHomePreferences ||
+        _betaDialogInProgress ||
+        ModalRoute.of(context)?.isCurrent != true) {
       return;
     }
 
-    await showBetaNoticeDialog(
-      context,
-      spanish: _espanol,
-      kind: BetaNoticeKind.welcome,
-    );
+    BetaNoticeReservation? reservation;
+    VoidCallback? sessionListener;
+    try {
+      reservation = await _betaNoticeService.reserveIfShouldShow(
+        ticket.uid,
+        BetaNoticeKind.welcome,
+      );
+      if (reservation == null ||
+          !mounted ||
+          !session.isCurrentTicket(ticket) ||
+          ModalRoute.of(context)?.isCurrent != true) {
+        return;
+      }
 
-    await _betaNoticeService.markShown(BetaNoticeKind.welcome);
+      _betaDialogInProgress = true;
+      _betaDialogInvalidated = false;
+      _betaDialogKey = GlobalKey();
+      sessionListener = () {
+        if (!session.isCurrentTicket(ticket)) _invalidateBetaDialog();
+      };
+      session.addListener(sessionListener);
+
+      await (widget.betaDialogPresenter ?? showBetaNoticeDialog)(
+        context,
+        spanish: _espanol,
+        kind: BetaNoticeKind.welcome,
+        dialogKey: _betaDialogKey,
+        onInvalidated: () => _betaDialogInvalidated = true,
+      );
+
+      bool remainsValid() {
+        return mounted &&
+            !_betaDialogInvalidated &&
+            session.isCurrentTicket(ticket) &&
+            ModalRoute.of(context)?.isCurrent == true;
+      }
+
+      if (!remainsValid()) return;
+      await _betaNoticeService.markShown(reservation, isValid: remainsValid);
+    } catch (error) {
+      debugPrint('No se pudo completar el aviso Beta de Inicio: $error');
+    } finally {
+      if (sessionListener != null) session.removeListener(sessionListener);
+      if (reservation != null) _betaNoticeService.release(reservation);
+      _betaDialogInProgress = false;
+      _betaDialogKey = null;
+    }
+  }
+
+  void _invalidateBetaDialog() {
+    _betaDialogInvalidated = true;
+    final dialogContext = _betaDialogKey?.currentContext;
+    final route = dialogContext == null ? null : ModalRoute.of(dialogContext);
+    if (route == null || !route.isActive) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (route.isActive) route.navigator?.removeRoute(route);
+    });
   }
 
   void _actualizarIdioma() {
@@ -351,11 +428,17 @@ class _DashboardPageState extends State<DashboardPage>
   }
 
   Future<void> _cargarPreferenciasInicio() async {
-    final HomePreferences preferences = await _homePreferencesService
-        .loadCurrent();
-    if (!mounted) return;
-    setState(() => _homePreferences = preferences);
-    await _actualizarResumenInteligente();
+    try {
+      final HomePreferences preferences = await _homePreferencesService
+          .loadCurrent();
+      if (!mounted) return;
+      setState(() => _homePreferences = preferences);
+      await _actualizarResumenInteligente();
+    } catch (_) {
+      _errorHomePreferences = true;
+    } finally {
+      _homePreferencesLoaded = true;
+    }
   }
 
   void _actualizarPreferenciasInicio() async {
@@ -396,7 +479,37 @@ class _DashboardPageState extends State<DashboardPage>
     await Future.wait([_cargarPerfil(), _cargarContenido()]);
   }
 
+  Future<void> _cargarInicio() async {
+    final override = widget.initialLoadOverride;
+    if (override != null) {
+      try {
+        await override();
+        _cargandoPerfil = false;
+        _cargandoContenido = false;
+        _homePreferencesLoaded = true;
+      } catch (_) {
+        _errorContenido = true;
+      }
+      if (!mounted) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _mostrarBienvenidaBeta();
+      });
+      return;
+    }
+    await Future.wait([_cargarDashboard(), _cargarPreferenciasInicio()]);
+    if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _mostrarBienvenidaBeta();
+    });
+  }
+
   Future<void> _cargarPerfil({bool silencioso = false}) async {
+    final session = _sessionController;
+    final ticket = session.captureTicket();
+    if (ticket == null || !session.isCurrentTicket(ticket)) {
+      return;
+    }
+
     if (!silencioso) {
       setState(() {
         _cargandoPerfil = true;
@@ -405,23 +518,10 @@ class _DashboardPageState extends State<DashboardPage>
     }
 
     try {
-      final usuario = _authService.usuarioActual;
+      final PerfilUsuario? perfil = await (_perfilService ??= PerfilService())
+          .obtenerPerfil(ticket.uid);
 
-      if (usuario == null) {
-        if (!mounted) {
-          return;
-        }
-
-        await _volverAlLogin();
-
-        return;
-      }
-
-      final PerfilUsuario? perfil = await _perfilService.obtenerPerfil(
-        usuario.uid,
-      );
-
-      if (!mounted) {
+      if (!mounted || !session.isCurrentTicket(ticket)) {
         return;
       }
 
@@ -430,7 +530,7 @@ class _DashboardPageState extends State<DashboardPage>
         _errorPerfil = perfil == null;
       });
     } catch (_) {
-      if (!mounted) {
+      if (!mounted || !session.isCurrentTicket(ticket)) {
         return;
       }
 
@@ -440,7 +540,7 @@ class _DashboardPageState extends State<DashboardPage>
         });
       }
     } finally {
-      if (mounted && !silencioso) {
+      if (mounted && !silencioso && session.isCurrentTicket(ticket)) {
         setState(() {
           _cargandoPerfil = false;
         });
@@ -572,13 +672,17 @@ class _DashboardPageState extends State<DashboardPage>
     });
 
     try {
-      await _authService.cerrarSesion();
-
-      if (!mounted) {
-        return;
+      await _sessionController.signOut();
+    } catch (_) {
+      if (mounted) {
+        showAppStatusSnackBar(
+          context,
+          message: _espanol
+              ? 'No pudimos cerrar la sesión. Inténtalo nuevamente.'
+              : 'We could not sign you out. Please try again.',
+          type: AppStatusType.error,
+        );
       }
-
-      await _volverAlLogin();
     } finally {
       if (mounted) {
         setState(() {
@@ -586,13 +690,6 @@ class _DashboardPageState extends State<DashboardPage>
         });
       }
     }
-  }
-
-  Future<void> _volverAlLogin() async {
-    await Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const LoginPage()),
-      (_) => false,
-    );
   }
 
   Future<void> _abrirPerfil({bool completar = false}) async {
@@ -628,6 +725,14 @@ class _DashboardPageState extends State<DashboardPage>
   Future<void> _abrirTareas() async {
     await Navigator.of(context)
         .push(MaterialPageRoute(builder: (_) => const TasksPage()));
+
+    if (!mounted) return;
+    await _cargarContenido(forzar: true, silencioso: true);
+  }
+
+  Future<void> _abrirNotas() async {
+    await Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const GradesPage()));
 
     if (!mounted) return;
     await _cargarContenido(forzar: true, silencioso: true);
@@ -1016,6 +1121,10 @@ class _DashboardPageState extends State<DashboardPage>
               _abrirAsignaturas();
               break;
 
+            case _ProfileAction.notas:
+              _abrirNotas();
+              break;
+
             case _ProfileAction.tareas:
               _abrirTareas();
               break;
@@ -1040,6 +1149,13 @@ class _DashboardPageState extends State<DashboardPage>
               action: _ProfileAction.asignaturas,
               icon: Icons.menu_book_outlined,
               label: _espanol ? 'Asignaturas' : 'Subjects',
+              oscuro: oscuro,
+            ),
+
+            _profileMenuItem(
+              action: _ProfileAction.notas,
+              icon: Icons.analytics_outlined,
+              label: _espanol ? 'Notas' : 'Grades',
               oscuro: oscuro,
             ),
 
@@ -1144,6 +1260,10 @@ class _DashboardPageState extends State<DashboardPage>
               _abrirAsignaturas();
               break;
 
+            case _ProfileAction.notas:
+              _abrirNotas();
+              break;
+
             case _ProfileAction.tareas:
               _abrirTareas();
               break;
@@ -1170,6 +1290,13 @@ class _DashboardPageState extends State<DashboardPage>
               action: _ProfileAction.asignaturas,
               icon: Icons.menu_book_outlined,
               label: _espanol ? 'Asignaturas' : 'Subjects',
+              oscuro: oscuro,
+            ),
+
+            _profileMenuItem(
+              action: _ProfileAction.notas,
+              icon: Icons.analytics_outlined,
+              label: _espanol ? 'Notas' : 'Grades',
               oscuro: oscuro,
             ),
 
@@ -2772,4 +2899,4 @@ class _DashboardPageState extends State<DashboardPage>
 // ACCIONES MENÚ PERFIL
 // ===========================================================
 
-enum _ProfileAction { perfil, asignaturas, tareas, ajustes, logout }
+enum _ProfileAction { perfil, asignaturas, notas, tareas, ajustes, logout }

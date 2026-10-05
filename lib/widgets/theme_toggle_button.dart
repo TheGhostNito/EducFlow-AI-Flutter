@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../services/theme_service.dart';
+import '../services/translation_service.dart';
+import 'app_status_snackbar.dart';
 
 class ThemeToggleButton extends StatefulWidget {
   const ThemeToggleButton({super.key, this.disabled = false});
@@ -14,18 +16,35 @@ class ThemeToggleButton extends StatefulWidget {
 class _ThemeToggleButtonState extends State<ThemeToggleButton> {
   final ThemeService _themeService = ThemeService.instance;
 
-  double _turns = 0;
+  bool _changing = false;
+  DateTime? _lastToggle;
 
   Future<void> _cambiarTema() async {
-    if (widget.disabled) {
+    final now = DateTime.now();
+    if (widget.disabled ||
+        _changing ||
+        (_lastToggle != null &&
+            now.difference(_lastToggle!) < const Duration(milliseconds: 350))) {
       return;
     }
 
-    setState(() {
-      _turns += 0.5;
-    });
-
-    await _themeService.toggleTheme();
+    _lastToggle = now;
+    setState(() => _changing = true);
+    try {
+      await _themeService.toggleTheme();
+    } catch (_) {
+      if (mounted) {
+        showAppStatusSnackBar(
+          context,
+          message: TranslationService.instance.isSpanish
+              ? 'No pudimos guardar el tema. Se restauró la opción anterior.'
+              : 'We could not save the theme. The previous option was restored.',
+          type: AppStatusType.error,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _changing = false);
+    }
   }
 
   @override
@@ -34,7 +53,7 @@ class _ThemeToggleButtonState extends State<ThemeToggleButton> {
 
     return AnimatedOpacity(
       duration: const Duration(milliseconds: 180),
-      opacity: widget.disabled ? 0.55 : 1,
+      opacity: widget.disabled || _changing ? 0.55 : 1,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
         curve: Curves.easeOut,
@@ -60,30 +79,23 @@ class _ThemeToggleButtonState extends State<ThemeToggleButton> {
           color: Colors.transparent,
           child: InkWell(
             borderRadius: BorderRadius.circular(13),
-            onTap: widget.disabled ? null : _cambiarTema,
+            onTap: widget.disabled || _changing ? null : _cambiarTema,
             child: Center(
-              child: AnimatedRotation(
-                turns: _turns,
-                duration: const Duration(milliseconds: 320),
-                curve: Curves.easeOutBack,
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 180),
-                  transitionBuilder: (child, animation) {
-                    return FadeTransition(
-                      opacity: animation,
-                      child: ScaleTransition(scale: animation, child: child),
-                    );
-                  },
-                  child: Icon(
-                    oscuro
-                        ? Icons.dark_mode_outlined
-                        : Icons.light_mode_outlined,
-                    key: ValueKey(oscuro),
-                    size: 22,
-                    color: oscuro
-                        ? const Color(0xFFF6C453)
-                        : const Color(0xFF5B5FEF),
-                  ),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 180),
+                transitionBuilder: (child, animation) {
+                  return FadeTransition(
+                    opacity: animation,
+                    child: ScaleTransition(scale: animation, child: child),
+                  );
+                },
+                child: Icon(
+                  oscuro ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
+                  key: ValueKey(oscuro),
+                  size: 22,
+                  color: oscuro
+                      ? const Color(0xFFF6C453)
+                      : const Color(0xFF5B5FEF),
                 ),
               ),
             ),

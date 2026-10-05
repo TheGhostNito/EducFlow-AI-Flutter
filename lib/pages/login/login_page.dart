@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/auth/auth_service.dart';
+import '../../core/auth/session_controller.dart';
 import '../../services/translation_service.dart';
 import '../../widgets/auth_feedback.dart';
 import '../../widgets/language_selector.dart';
@@ -9,7 +13,18 @@ import '../../widgets/theme_toggle_button.dart';
 import '../register/register_page.dart';
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
+  const LoginPage({
+    super.key,
+    this.sessionController,
+    this.loginAction,
+    this.registerPageBuilder,
+    this.autofillFinisher,
+  });
+
+  final SessionController? sessionController;
+  final Future<void> Function(String email, String password)? loginAction;
+  final WidgetBuilder? registerPageBuilder;
+  final void Function(bool shouldSave)? autofillFinisher;
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -27,7 +42,9 @@ class _LoginPageState extends State<LoginPage> {
   final FocusNode _emailFocusNode = FocusNode();
   final FocusNode _passwordFocusNode = FocusNode();
 
-  final AuthService _authService = AuthService();
+  AuthService? _authServiceCache;
+  AuthService get _authService => _authServiceCache ??= AuthService();
+  late final SessionController _sessionController;
 
   final TranslationService _translationService = TranslationService.instance;
 
@@ -40,6 +57,7 @@ class _LoginPageState extends State<LoginPage> {
   bool _mostrarContrasena = false;
 
   bool _credencialesInvalidas = false;
+  bool _autofillFinished = false;
 
   String _errorMessage = '';
   String _successMessage = '';
@@ -123,6 +141,7 @@ class _LoginPageState extends State<LoginPage> {
     }
 
     setState(() {
+      _autofillFinished = false;
       _credencialesInvalidas = false;
       _errorMessage = '';
       _successMessage = '';
@@ -182,8 +201,26 @@ class _LoginPageState extends State<LoginPage> {
     try {
       // AuthGate es el único propietario de la ruta principal y cambia a
       // MainNavigation cuando Firebase publica la sesión autenticada.
-      await _authService.iniciarSesion(correo: correo, contrasena: contrasena);
+      await _sessionController.authenticate(
+        onPreparationResult: (ready) {
+          _finishAutofillContext(shouldSave: ready);
+        },
+        operation: () async {
+          final action = widget.loginAction;
+          if (action != null) {
+            await action(correo, contrasena);
+            return;
+          }
+          await _authService.iniciarSesion(
+            correo: correo,
+            contrasena: contrasena,
+          );
+        },
+      );
+
+      _finishAutofillContext(shouldSave: _sessionController.isReady);
     } on FirebaseAuthException catch (error) {
+      _finishAutofillContext(shouldSave: false);
       if (!mounted) {
         return;
       }
@@ -241,6 +278,7 @@ class _LoginPageState extends State<LoginPage> {
         }
       });
     } catch (_) {
+      _finishAutofillContext(shouldSave: false);
       if (!mounted) {
         return;
       }
@@ -358,6 +396,8 @@ class _LoginPageState extends State<LoginPage> {
   void initState() {
     super.initState();
 
+    _sessionController = widget.sessionController ?? SessionController.instance;
+
     _translationService.addListener(_actualizarIdioma);
 
     _emailFocusNode.addListener(_actualizarFoco);
@@ -375,6 +415,24 @@ class _LoginPageState extends State<LoginPage> {
     if (mounted) {
       setState(() {});
     }
+  }
+
+  void _finishAutofillContext({required bool shouldSave}) {
+    if (_autofillFinished) {
+      return;
+    }
+    _autofillFinished = true;
+    final finisher = widget.autofillFinisher;
+    if (finisher != null) {
+      finisher(shouldSave);
+      return;
+    }
+    unawaited(
+      SystemChannels.textInput.invokeMethod<void>(
+        'TextInput.finishAutofillContext',
+        shouldSave,
+      ),
+    );
   }
 
   @override
@@ -608,12 +666,16 @@ class _LoginPageState extends State<LoginPage> {
               enabled: !_actionInProgress,
               keyboardType: TextInputType.emailAddress,
               textInputAction: TextInputAction.next,
-              autofillHints: const [AutofillHints.email],
+              autofillHints: const [
+                AutofillHints.username,
+                AutofillHints.email,
+              ],
               cursorColor: _primaryColor,
               style: _inputTextStyle(oscuro),
               onChanged: (_) {
                 _credencialModificada();
               },
+              onSubmitted: (_) => _passwordFocusNode.requestFocus(),
               decoration: _inputDecoration(
                 hintText: _espanol ? 'nombre@correo.com' : 'name@email.com',
                 icon: Icons.mail_outline,
@@ -812,7 +874,11 @@ class _LoginPageState extends State<LoginPage> {
                     : () {
                         Navigator.of(context).push(
                           MaterialPageRoute(
-                            builder: (_) => const RegisterPage(),
+                            builder:
+                                widget.registerPageBuilder ??
+                                (_) => RegisterPage(
+                                  sessionController: _sessionController,
+                                ),
                           ),
                         );
                       },

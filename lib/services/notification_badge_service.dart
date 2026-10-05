@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
+import '../core/auth/session_controller.dart';
 import '../models/asignatura.dart';
 import '../models/evaluacion.dart';
 import '../models/notificacion_app.dart';
@@ -29,15 +30,18 @@ class NotificationBadgeService extends ChangeNotifier {
   final NotificationStateService _stateService =
       NotificationStateService.instance;
 
-  StreamSubscription<User?>? _authSubscription;
   final List<StreamSubscription<QuerySnapshot<Map<String, dynamic>>>>
   _dataSubscriptions = [];
+  StreamSubscription<void>? _subjectsSubscription;
+  StreamSubscription<void>? _tasksSubscription;
+  StreamSubscription<void>? _evaluationsSubscription;
 
   Timer? _debounce;
 
   bool _started = false;
   bool _refreshing = false;
   bool _refreshPending = false;
+  String? _watchedUid;
 
   int _unreadCount = 0;
 
@@ -52,15 +56,24 @@ class NotificationBadgeService extends ChangeNotifier {
 
     _started = true;
 
-    _authSubscription = _auth.authStateChanges().listen(_watchUser);
+    SessionController.instance.addListener(_onSessionChanged);
+    _onSessionChanged();
+  }
 
-    _watchUser(_auth.currentUser);
+  void _onSessionChanged() {
+    final session = SessionController.instance;
+    final user = session.isReady ? _auth.currentUser : null;
+    if (_watchedUid == user?.uid) return;
+    _watchedUid = user?.uid;
+    _watchUser(user);
   }
 
   Future<void> refresh() async {
     final User? user = _auth.currentUser;
+    final session = SessionController.instance;
+    final ticket = session.captureTicket();
 
-    if (user == null) {
+    if (user == null || ticket == null || ticket.uid != user.uid) {
       _setUnreadCount(0);
       return;
     }
@@ -79,6 +92,9 @@ class NotificationBadgeService extends ChangeNotifier {
         _evaluacionesService.obtenerTodas(),
         _stateService.obtenerEstados(),
       ]);
+      if (!session.isCurrentTicket(ticket)) {
+        return;
+      }
 
       final List<Asignatura> asignaturas = resultados[0] as List<Asignatura>;
 
@@ -105,7 +121,9 @@ class NotificationBadgeService extends ChangeNotifier {
 
       final int cantidad = visibles.where((n) => !n.leida).length;
 
-      _setUnreadCount(cantidad);
+      if (session.isCurrentTicket(ticket)) {
+        _setUnreadCount(cantidad);
+      }
     } catch (_) {
       // Si hay un error temporal de red conservamos el último
       // contador conocido para evitar que el badge parpadee.
@@ -127,6 +145,12 @@ class NotificationBadgeService extends ChangeNotifier {
     }
 
     _dataSubscriptions.clear();
+    unawaited(_subjectsSubscription?.cancel());
+    _subjectsSubscription = null;
+    unawaited(_tasksSubscription?.cancel());
+    _tasksSubscription = null;
+    unawaited(_evaluationsSubscription?.cancel());
+    _evaluationsSubscription = null;
 
     if (user == null) {
       _setUnreadCount(0);
@@ -137,9 +161,24 @@ class NotificationBadgeService extends ChangeNotifier {
         .collection('usuarios')
         .doc(user.uid);
 
-    _listen(userRef.collection('asignaturas'));
-    _listen(userRef.collection('tareas'));
-    _listen(userRef.collection('evaluaciones'));
+    _subjectsSubscription = _asignaturasService.observarCambios().listen(
+      (_) => _scheduleRefresh(),
+      onError: (_) {
+        // Realtime puede reconectarse sin borrar el último contador visible.
+      },
+    );
+    _tasksSubscription = _tareasService.observarCambios().listen(
+      (_) => _scheduleRefresh(),
+      onError: (_) {
+        // Realtime puede reconectarse sin borrar el último contador visible.
+      },
+    );
+    _evaluationsSubscription = _evaluacionesService.observarCambios().listen(
+      (_) => _scheduleRefresh(),
+      onError: (_) {
+        // Realtime puede reconectarse sin borrar el último contador visible.
+      },
+    );
     _listen(userRef.collection('estadoNotificaciones'));
 
     _scheduleRefresh();
@@ -181,13 +220,19 @@ class NotificationBadgeService extends ChangeNotifier {
   @override
   void dispose() {
     _debounce?.cancel();
-    unawaited(_authSubscription?.cancel());
+    SessionController.instance.removeListener(_onSessionChanged);
 
     for (final subscription in _dataSubscriptions) {
       unawaited(subscription.cancel());
     }
 
     _dataSubscriptions.clear();
+    unawaited(_subjectsSubscription?.cancel());
+    _subjectsSubscription = null;
+    unawaited(_tasksSubscription?.cancel());
+    _tasksSubscription = null;
+    unawaited(_evaluationsSubscription?.cancel());
+    _evaluationsSubscription = null;
 
     super.dispose();
   }

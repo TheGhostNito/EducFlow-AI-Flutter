@@ -229,8 +229,12 @@ class UserPreferencesService {
             Map<String, dynamic>.from(rawPreferences),
           );
 
-          await _saveLocalCache(uid, preferences);
           _memoryCache[uid] = preferences;
+          try {
+            await _saveLocalCache(uid, preferences);
+          } catch (_) {
+            // La lectura remota confirmada sigue siendo autoritativa.
+          }
 
           return preferences;
         }
@@ -310,14 +314,80 @@ class UserPreferencesService {
     await _savePreferences(uid, current.copyWith(notifications: preferences));
   }
 
+  Future<void> ensureCompatibilityRoot({
+    required String uid,
+    required String email,
+    required UserPreferences initialPreferences,
+  }) async {
+    if (currentUid != uid) {
+      throw StateError('La raíz temporal no corresponde a la sesión activa.');
+    }
+
+    final authEmail = email.trim();
+    if (authEmail.isEmpty) {
+      throw StateError(
+        'No existe un correo seguro para crear la raíz temporal.',
+      );
+    }
+
+    final ref = _firestore.collection('usuarios').doc(uid);
+    final bool initialized = await _firestore.runTransaction<bool>((tx) async {
+      final snapshot = await tx.get(ref);
+      final data = snapshot.data();
+
+      // La transacción se reintenta si otro cliente crea o modifica la raíz
+      // entre la lectura y la escritura. Así nunca reemplazamos campos que
+      // aparecieron concurrentemente.
+      if (!snapshot.exists) {
+        if (currentUid != uid) {
+          throw StateError('La sesión cambió antes de crear la raíz temporal.');
+        }
+        tx.set(ref, {
+          'uid': uid,
+          'correoPrincipal': authEmail,
+          'fechaCreacion': FieldValue.serverTimestamp(),
+          'preferencias': initialPreferences.toMap(),
+        });
+        return true;
+      }
+
+      if (data?['preferencias'] is! Map) {
+        if (currentUid != uid) {
+          throw StateError(
+            'La sesión cambió antes de completar la raíz temporal.',
+          );
+        }
+        tx.set(ref, {
+          'preferencias': initialPreferences.toMap(),
+        }, SetOptions(merge: true));
+        return true;
+      }
+
+      return false;
+    });
+
+    if (initialized && currentUid == uid) {
+      _memoryCache[uid] = initialPreferences;
+      try {
+        await _saveLocalCache(uid, initialPreferences);
+      } catch (_) {
+        // La fuente remota quedó consistente aunque falle la caché local.
+      }
+    }
+  }
+
   Future<void> _savePreferences(String uid, UserPreferences preferences) async {
-    _memoryCache[uid] = preferences;
-
-    await _saveLocalCache(uid, preferences);
-
     await _firestore.collection('usuarios').doc(uid).set({
       'preferencias': preferences.toMap(),
     }, SetOptions(merge: true));
+
+    _memoryCache[uid] = preferences;
+    try {
+      await _saveLocalCache(uid, preferences);
+    } catch (_) {
+      // Firestore es la fuente autoritativa; una caché local defectuosa no
+      // debe revertir una escritura remota confirmada.
+    }
   }
 
   String _localKey(String uid, String preference) {

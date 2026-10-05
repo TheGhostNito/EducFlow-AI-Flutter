@@ -591,7 +591,7 @@ class _SubjectsPageState extends State<SubjectsPage> {
   Future<void> _abrirDetalle(Asignatura asignatura) async {
     HapticFeedback.selectionClick();
 
-    await Navigator.of(context).push(
+    final bool? deleted = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
         builder: (_) => SubjectDetailPage(subjectId: asignatura.id),
       ),
@@ -602,6 +602,15 @@ class _SubjectsPageState extends State<SubjectsPage> {
     }
 
     await _refrescar();
+
+    if (deleted == true && mounted) {
+      showAppStatusSnackBar(
+        context,
+        message: _espanol
+            ? 'Asignatura eliminada correctamente.'
+            : 'Subject deleted successfully.',
+      );
+    }
   }
 
   @override

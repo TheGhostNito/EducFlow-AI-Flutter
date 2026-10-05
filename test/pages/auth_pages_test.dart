@@ -38,10 +38,13 @@ void main() {
               ? const Color(0xFF0D0D10)
               : const Color(0xFFF6F7FB),
         ),
-        builder: (context, child) => MediaQuery(
-          data: MediaQuery.of(context)
-              .copyWith(textScaler: TextScaler.linear(escalaTexto)),
-          child: child!,
+        builder: (context, child) => AutofillGroup(
+          onDisposeAction: AutofillContextAction.cancel,
+          child: MediaQuery(
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: TextScaler.linear(escalaTexto)),
+            child: child!,
+          ),
         ),
         home: page,
       ),
@@ -180,6 +183,49 @@ void main() {
     expect(host.iniciosDeSesion, hasLength(1));
     expect(host.iniciosDeSesion.single.last, 'abc');
     expect(find.text('Mínimo 8 caracteres'), findsNothing);
+  });
+
+  testWidgets('Login agrupa Autofill y usa identificador antes de email', (
+    tester,
+  ) async {
+    await mostrar(tester, const LoginPage());
+    expect(find.byType(AutofillGroup), findsOneWidget);
+
+    final email = tester.widget<TextField>(find.byType(TextField).at(0));
+    final password = tester.widget<TextField>(find.byType(TextField).at(1));
+    expect(email.keyboardType, TextInputType.emailAddress);
+    expect(email.autofillHints, const [
+      AutofillHints.username,
+      AutofillHints.email,
+    ]);
+    expect(email.textInputAction, TextInputAction.next);
+    expect(password.autofillHints, const [AutofillHints.password]);
+    expect(password.textInputAction, TextInputAction.done);
+  });
+
+  testWidgets('Registro agrupa Autofill y conserva el flujo de foco', (
+    tester,
+  ) async {
+    await mostrar(tester, const RegisterPage());
+    expect(find.byType(AutofillGroup), findsOneWidget);
+
+    final fields = tester
+        .widgetList<TextField>(find.byType(TextField))
+        .toList();
+    expect(fields[0].autofillHints, const [AutofillHints.name]);
+    expect(fields[1].autofillHints, const [
+      AutofillHints.username,
+      AutofillHints.email,
+    ]);
+    expect(fields[1].keyboardType, TextInputType.emailAddress);
+    expect(fields[2].autofillHints, const [AutofillHints.newPassword]);
+    expect(fields[3].autofillHints, const [AutofillHints.newPassword]);
+    expect(fields.map((field) => field.textInputAction), const [
+      TextInputAction.next,
+      TextInputAction.next,
+      TextInputAction.next,
+      TextInputAction.done,
+    ]);
   });
 
   testWidgets('el registro muestra carga y bloquea envíos duplicados', (

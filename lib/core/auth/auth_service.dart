@@ -1,24 +1,22 @@
 import 'package:firebase_auth/firebase_auth.dart';
 
-import '../../services/perfil_service.dart';
-
-import '../../services/theme_service.dart';
-import '../../services/translation_service.dart';
-import '../../services/time_format_service.dart';
+import 'session_controller.dart';
 
 class AuthService {
-  AuthService({FirebaseAuth? firebaseAuth, PerfilService? perfilService})
-    : _firebaseAuth = firebaseAuth ?? FirebaseAuth.instance,
-      _perfilService = perfilService ?? PerfilService();
+  AuthService({FirebaseAuth? firebaseAuth})
+    : _firebaseAuth = firebaseAuth ?? FirebaseAuth.instance;
 
   final FirebaseAuth _firebaseAuth;
-  final PerfilService _perfilService;
 
   User? get usuarioActual => _firebaseAuth.currentUser;
 
   bool get estaAutenticado => usuarioActual != null;
 
   Stream<User?> get usuarioStream => _firebaseAuth.authStateChanges();
+
+  // =========================================================
+  // REGISTRO
+  // =========================================================
 
   Future<UserCredential> registrar({
     required String nombre,
@@ -49,25 +47,12 @@ class AuthService {
       await usuario.reload();
     }
 
-    await _perfilService.crearPerfilInicial(
-      uid: usuario.uid,
-      nombre: nombreNormalizado,
-      correoPrincipal: correoNormalizado,
-      idioma: idioma,
-    );
-
-    await ThemeService.instance.loadCurrentUserPreferences(forceRefresh: true);
-
-    await TranslationService.instance.loadCurrentUserPreferences(
-      forceRefresh: false,
-    );
-
-    await TimeFormatService.instance.loadCurrentUserPreferences(
-      forceRefresh: false,
-    );
-
     return credencial;
   }
+
+  // =========================================================
+  // INICIAR SESIÓN
+  // =========================================================
 
   Future<UserCredential> iniciarSesion({
     required String correo,
@@ -81,28 +66,27 @@ class AuthService {
           password: contrasena,
         );
 
-    await ThemeService.instance.loadCurrentUserPreferences(forceRefresh: true);
-
-    await TranslationService.instance.loadCurrentUserPreferences(
-      forceRefresh: false,
-    );
-
-    await TimeFormatService.instance.loadCurrentUserPreferences(
-      forceRefresh: false,
-    );
+    if (credencial.user == null) {
+      throw FirebaseAuthException(
+        code: 'user-not-found',
+        message: 'No fue posible obtener el usuario autenticado.',
+      );
+    }
 
     return credencial;
   }
 
+  // =========================================================
+  // CERRAR SESIÓN
+  // =========================================================
+
   Future<void> cerrarSesion() async {
-    await _firebaseAuth.signOut();
-
-    ThemeService.instance.resetForSignedOutUser();
-
-    TranslationService.instance.resetForSignedOutUser();
-
-    await TimeFormatService.instance.resetForSignedOutUser();
+    await SessionController.instance.signOut();
   }
+
+  // =========================================================
+  // RECUPERAR CONTRASEÑA
+  // =========================================================
 
   Future<void> recuperarContrasena({required String correo}) async {
     final correoNormalizado = correo.trim().toLowerCase();

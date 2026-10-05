@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/translation_service.dart';
+import 'app_status_snackbar.dart';
 
 class LanguageSelector extends StatefulWidget {
   const LanguageSelector({
@@ -130,9 +131,20 @@ class _LanguageSelectorState extends State<LanguageSelector>
   }
 
   Future<void> _cambiarIdioma() async {
-    await _translationService.toggleLanguage();
-
-    widget.onLanguageChanged?.call();
+    try {
+      await _translationService.toggleLanguage();
+      widget.onLanguageChanged?.call();
+    } catch (_) {
+      if (mounted) {
+        showAppStatusSnackBar(
+          context,
+          message: _translationService.isSpanish
+              ? 'No pudimos guardar el idioma. Restauramos el valor anterior.'
+              : 'We could not save the language. The previous value was restored.',
+          type: AppStatusType.error,
+        );
+      }
+    }
 
     await _cerrarMenu();
   }

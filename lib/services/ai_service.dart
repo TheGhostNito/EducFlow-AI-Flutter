@@ -1,17 +1,34 @@
 import 'package:firebase_ai/firebase_ai.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 
 import '../models/asignatura.dart';
 import '../models/evaluacion.dart';
+import '../models/nota.dart';
 import '../models/perfil_usuario.dart';
 import '../models/ai_conversation.dart';
 import '../models/tarea.dart';
 import 'asignaturas_service.dart';
+import 'ai_function_calling_flow.dart';
+import 'analisis_notas_ia_service.dart';
+import 'calculo_notas_service.dart';
 import 'evaluaciones_service.dart';
+import 'notas_service.dart';
 import 'perfil_service.dart';
 import 'tareas_service.dart';
 
-class AiService {
+abstract interface class AiAssistantClient {
+  void iniciarNuevoChat();
+
+  void iniciarConversacion({
+    required String conversationId,
+    List<AiChatMessage> history = const [],
+  });
+
+  Future<String> enviarMensaje(String mensaje);
+}
+
+class AiService implements AiAssistantClient {
   AiService._();
 
   static final AiService instance = AiService._();
@@ -21,6 +38,13 @@ class AiService {
   final AsignaturasService _asignaturasService = AsignaturasService.instance;
   final TareasService _tareasService = TareasService.instance;
   final EvaluacionesService _evaluacionesService = EvaluacionesService.instance;
+  final NotasService _notasService = NotasService.instance;
+  final CalculoNotasService _calculoNotasService = const CalculoNotasService();
+  final AnalisisNotasIaService _analisisNotasIaService =
+      const AnalisisNotasIaService();
+  late final AiFunctionCallingFlow _functionCallingFlow = AiFunctionCallingFlow(
+    logger: _registrarDiagnostico,
+  );
 
   ChatSession? _chat;
   String? _chatUid;
@@ -41,6 +65,7 @@ REGLAS IMPORTANTES:
 - No inventes información académica.
 - Cuando una pregunta dependa de datos reales de EducFlow, usa las herramientas disponibles.
 - Los datos devueltos por las herramientas son la fuente de verdad.
+- Para notas, promedios, objetivos y proyecciones usa siempre analizarNotas. No recalcules ni inventes resultados: interpreta el resultado determinista que entrega esa herramienta.
 - Puedes usar varias herramientas para una misma respuesta.
 - Si un dato no está disponible, dilo claramente.
 - Para referencias como hoy, mañana, esta semana, pendientes o próximas evaluaciones, usa la fecha actual devuelta por las herramientas.
@@ -75,16 +100,57 @@ REGLAS IMPORTANTES:
           'Obtiene las evaluaciones reales del usuario, incluyendo asignatura, tipo, fecha, hora, descripción y ponderación.',
           parameters: const {},
         ),
+        FunctionDeclaration(
+          'analizarNotas',
+          'Obtiene el análisis determinista de notas, incluyendo esquemas directos o presentación más examen final. Puede filtrar una asignatura y simular notas hipotéticas sin guardarlas. Úsala para cualquier pregunta sobre promedios, aprobación, objetivos o escenarios.',
+          parameters: {
+            'asignatura': Schema.string(
+              description: 'Nombre o sigla de la asignatura. Omítelo para analizar todas.',
+            ),
+            'escenarios': Schema.array(
+              description: 'Notas hipotéticas que solo se usan en este cálculo y nunca se guardan.',
+              items: Schema.object(
+                properties: {
+                  'evaluacion': Schema.string(
+                    description: 'Nombre de una evaluación pendiente.',
+                  ),
+                  'nota': Schema.number(
+                    description:
+                        'Nota hipotética dentro de la escala configurada.',
+                  ),
+                },
+              ),
+            ),
+            'notaPresentacionHipotetica': Schema.number(
+              description: 'Nota de presentación hipotética para una asignatura con esquema presentación más examen.',
+            ),
+            'notaExamenHipotetica': Schema.number(
+              description: 'Nota de examen hipotética para una asignatura con examen final configurado.',
+            ),
+            'objetivoPresentacion': Schema.number(
+              description: 'Nota de presentación que el usuario quiere alcanzar antes del examen.',
+            ),
+          },
+          optionalParameters: const [
+            'asignatura',
+            'escenarios',
+            'notaPresentacionHipotetica',
+            'notaExamenHipotetica',
+            'objetivoPresentacion',
+          ],
+        ),
       ]),
     ],
     toolConfig: ToolConfig(functionCallingConfig: FunctionCallingConfig.auto()),
   );
 
+  @override
   void iniciarNuevoChat() {
     _chat = null;
     _chatUid = null;
   }
 
+  @override
   void iniciarConversacion({
     required String conversationId,
     List<AiChatMessage> history = const [],
@@ -139,6 +205,7 @@ REGLAS IMPORTANTES:
     }).toList();
   }
 
+  @override
   Future<String> enviarMensaje(String mensaje) async {
     final String texto = mensaje.trim();
 
@@ -153,45 +220,56 @@ REGLAS IMPORTANTES:
     }
 
     final ChatSession chat = _obtenerChat(user.uid);
-    GenerateContentResponse response = await chat.sendMessage(
-      Content.text(texto),
-    );
+    try {
+      return await _functionCallingFlow.run(
+        sendInitialMessage: () async {
+          final response = await chat.sendMessage(Content.text(texto));
+          return _convertirTurno(response);
+        },
+        executeTool: (call) => _ejecutarHerramienta(call.name, call.arguments),
+        sendToolResults: (results) async {
+          final responses = results
+              .map(
+                (item) => FunctionResponse(item.name, item.result, id: item.id),
+              )
+              .toList(growable: false);
 
-    for (int round = 0; round < 8; round++) {
-      final List<FunctionCall> calls = response.functionCalls.toList();
-
-      if (calls.isEmpty) {
-        final String result = response.text?.trim() ?? '';
-
-        if (result.isEmpty) {
-          throw StateError('Gemini no devolvió una respuesta de texto.');
-        }
-
-        return result;
-      }
-
-      final List<FunctionResponse> toolResponses = [];
-
-      for (final FunctionCall call in calls) {
-        final Map<String, Object?> result = await _ejecutarHerramienta(call);
-
-        toolResponses.add(FunctionResponse(call.name, result, id: call.id));
-      }
-
-      // Firebase AI Logic con Gemini Developer API acepta
-      // las respuestas de herramientas como un turno USER.
-      // Content.functionResponses(...) puede serializar este
-      // turno con role "function", que el backend actual rechaza.
-      response = await chat.sendMessage(Content('user', toolResponses));
+          // Firebase AI Logic con Gemini Developer API acepta las respuestas
+          // de herramientas como turno USER. El rol "function" es rechazado
+          // por el backend utilizado actualmente.
+          final response = await chat.sendMessage(Content('user', responses));
+          return _convertirTurno(response);
+        },
+      );
+    } on AiRequestTimeoutException {
+      // El Future remoto puede completar más tarde. Descartamos esta sesión
+      // para que un reintento no quede ligado a un turno de resultado incierto.
+      _chat = null;
+      _chatUid = null;
+      rethrow;
     }
+  }
 
-    throw StateError(
-      'EduFlow AI realizó demasiadas llamadas seguidas a herramientas.',
+  AiModelTurn _convertirTurno(GenerateContentResponse response) {
+    return AiModelTurn(
+      text: response.text,
+      functionCalls: response.functionCalls
+          .map(
+            (call) => AiToolCallRequest(
+              name: call.name,
+              arguments: call.args,
+              id: call.id,
+            ),
+          )
+          .toList(growable: false),
     );
   }
 
-  Future<Map<String, Object?>> _ejecutarHerramienta(FunctionCall call) async {
-    switch (call.name) {
+  Future<Map<String, Object?>> _ejecutarHerramienta(
+    String nombre,
+    Map<String, Object?> argumentos,
+  ) async {
+    switch (nombre) {
       case 'obtenerPerfil':
         return _obtenerPerfil();
       case 'obtenerAsignaturas':
@@ -202,10 +280,12 @@ REGLAS IMPORTANTES:
         return _obtenerTareas();
       case 'obtenerEvaluaciones':
         return _obtenerEvaluaciones();
+      case 'analizarNotas':
+        return _obtenerAnalisisNotas(argumentos);
       default:
         return {
           'exito': false,
-          'error': 'Herramienta no implementada: ${call.name}',
+          'error': 'Herramienta no implementada: $nombre',
         };
     }
   }
@@ -348,8 +428,8 @@ REGLAS IMPORTANTES:
           'asignatura': tarea.asignaturaId == null
               ? null
               : nombres[tarea.asignaturaId!],
-          'prioridad': tarea.prioridad.valorFirestore,
-          'estado': tarea.estado.valorFirestore,
+          'prioridad': tarea.prioridad.valorPersistencia,
+          'estado': tarea.estado.valorPersistencia,
           'fechaEntrega': _fechaNullable(tarea.fechaEntrega),
           'horaEntrega': _nullable(tarea.horaEntrega),
           'completadaEn': tarea.completadaEn?.toIso8601String(),
@@ -388,6 +468,134 @@ REGLAS IMPORTANTES:
     };
   }
 
+  Future<Map<String, Object?>> _obtenerAnalisisNotas(
+    Map<String, Object?> argumentos,
+  ) async {
+    _registrarDiagnostico('analizar_notas_started', {
+      'argumentKeys': argumentos.keys.toList(growable: false),
+    });
+    try {
+      final datos = await _notasService.obtenerDatos();
+      final resolucion = _analisisNotasIaService.resolver(
+        argumentos: argumentos,
+        asignaturas: datos.asignaturas,
+        evaluaciones: datos.evaluaciones,
+        calificaciones: datos.calificaciones,
+        configuracion: datos.configuracion,
+      );
+
+      final analisis = resolucion.asignaturas.map((asignatura) {
+        final evaluacionesAsignatura = datos.evaluaciones
+            .where((item) => item.asignaturaId == asignatura.id)
+            .toList();
+        final objetivo =
+            datos.objetivos[asignatura.id]?.notaObjetivo ??
+            datos.configuracion.notaAprobacion;
+        final entradas = evaluacionesAsignatura.map((evaluacion) {
+          return EntradaCalculoNota(
+            id: evaluacion.id,
+            nombre: evaluacion.titulo,
+            ponderacion: evaluacion.ponderacion,
+            notaReal: datos.calificaciones[evaluacion.id]?.nota,
+            notaHipotetica: resolucion.notasHipoteticas[evaluacion.id],
+          );
+        }).toList();
+        final resultado = _calculoNotasService.calcular(
+          evaluaciones: entradas,
+          configuracion: datos.configuracion,
+          objetivo: objetivo,
+          configuracionAsignatura:
+              datos.configuracionesCalculo[asignatura.id] ??
+              ConfiguracionCalculoAsignatura.directa(asignatura.id),
+          notaPresentacionHipotetica: _doubleArgument(
+            argumentos['notaPresentacionHipotetica'],
+          ),
+          notaExamenHipotetica: _doubleArgument(
+            argumentos['notaExamenHipotetica'],
+          ),
+          objetivoPresentacion: _doubleArgument(
+            argumentos['objetivoPresentacion'],
+          ),
+        );
+
+        return <String, Object?>{
+          'asignatura': asignatura.nombre,
+          'objetivo': objetivo,
+          'nivelEducativo': datos.nivelEducativo.valorFirestore,
+          'escala': {
+            'minima': datos.configuracion.notaMinima,
+            'maxima': datos.configuracion.notaMaxima,
+            'aprobacion': datos.configuracion.notaAprobacion,
+          },
+          ...resultado.toStructuredMap(),
+          'evaluaciones': evaluacionesAsignatura.map((evaluacion) {
+            final nota = datos.calificaciones[evaluacion.id]?.nota;
+            final hipotetica = resolucion.notasHipoteticas[evaluacion.id];
+            final ponderacion = evaluacion.ponderacion;
+            return <String, Object?>{
+              'nombre': evaluacion.titulo,
+              'fecha': _fecha(evaluacion.fecha),
+              'notaReal': nota,
+              'notaHipotetica': hipotetica,
+              'pendiente': nota == null,
+              'ponderacion': ponderacion,
+              'aporteFinal': (nota ?? hipotetica) != null && ponderacion != null
+                  ? (nota ?? hipotetica)! * ponderacion / 100
+                  : null,
+            };
+          }).toList(),
+        };
+      }).toList();
+
+      _registrarDiagnostico('analizar_notas_completed', {
+        'cantidadAsignaturas': analisis.length,
+        'cantidadAdvertencias': resolucion.advertencias.length,
+        'resultados': analisis
+            .map((item) {
+              return {
+                'resultKeys': item.keys.toList(growable: false),
+                'estadoAcademico': item['estadoAcademico'],
+                'evaluado': item['evaluado'],
+                'tieneResultadoFinal': item['resultadoFinalProyectado'] != null,
+                'tienePromedioNecesario':
+                    item['promedioNecesarioRestante'] != null,
+                'tieneNotaNecesariaExamen': item['notaNecesariaExamen'] != null,
+              };
+            })
+            .toList(growable: false),
+      });
+
+      return {
+        'exito': true,
+        'fechaActual': _fechaActual(),
+        'escenarioPersistido': false,
+        'advertencias': resolucion.advertencias,
+        'reglaInterpretacion': 'Si hay varias evaluaciones pendientes, promedioNecesarioRestante corresponde al promedio de todo el peso restante; no es una nota exacta para la próxima evaluación. notaNecesariaSiQuedaUna solo aparece cuando queda exactamente una evaluación ponderada.',
+        'asignaturas': analisis,
+      };
+    } catch (error, stackTrace) {
+      _registrarDiagnostico('analizar_notas_failed', {
+        'errorType': error.runtimeType.toString(),
+      });
+      debugPrintStack(
+        label: 'EducFlow AI analizarNotas stack trace',
+        stackTrace: stackTrace,
+      );
+      return {
+        'exito': false,
+        'fechaActual': _fechaActual(),
+        'error': 'No fue posible cargar el módulo de notas. No estimes ni inventes cálculos; informa al usuario que debe revisar la configuración o la conexión.',
+      };
+    }
+  }
+
+  void _registrarDiagnostico(String evento, Map<String, Object?> detalles) {
+    assert(() {
+      debugPrint('[EducFlow AI][$evento] $detalles');
+      return true;
+    }());
+  }
+
   User _usuarioActual() {
     final User? user = _auth.currentUser;
 
@@ -396,6 +604,11 @@ REGLAS IMPORTANTES:
     }
 
     return user;
+  }
+
+  double? _doubleArgument(Object? value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString().replaceAll(',', '.') ?? '');
   }
 
   String _fechaActual() {
