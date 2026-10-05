@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:eduflow_ai/core/auth/session_controller.dart';
+import 'package:eduflow_ai/models/evaluacion.dart';
 import 'package:eduflow_ai/models/tarea.dart';
 import 'package:eduflow_ai/services/academic_notification_scheduler.dart';
 import 'package:eduflow_ai/services/user_preferences_service.dart';
@@ -230,13 +231,103 @@ void main() {
       expect(notifications.pending, {2: 'general'});
     },
   );
+
+  test('un evento Realtime de evaluaciones vuelve a sincronizar', () async {
+    final current = identity('u1');
+    final auth = StreamController<SessionUserIdentity?>();
+    final evaluationChanges = StreamController<void>.broadcast();
+    final controller = SessionController(
+      currentUserProvider: () => current,
+      authChanges: auth.stream,
+      sessionPreparation: (_, _, _) async {},
+      signOutAction: () async {},
+    );
+    await controller.requestPreparation();
+    final notifications = _FakeNotifications();
+    var evaluationLoads = 0;
+    final scheduler = _scheduler(
+      controller: controller,
+      notifications: notifications,
+      loadEvaluations: () async {
+        evaluationLoads++;
+        return const [];
+      },
+      watchEvaluations: () => evaluationChanges.stream,
+      syncDelay: Duration.zero,
+    );
+    scheduler.start();
+    addTearDown(() async {
+      await scheduler.dispose();
+      controller.dispose();
+      await auth.close();
+      await evaluationChanges.close();
+    });
+
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    await scheduler.waitForIdle();
+    final initialLoads = evaluationLoads;
+
+    evaluationChanges.add(null);
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    await scheduler.waitForIdle();
+
+    expect(initialLoads, greaterThan(0));
+    expect(evaluationLoads, initialLoads + 1);
+  });
+
+  test('un evento Realtime de tareas vuelve a sincronizar', () async {
+    final current = identity('u1');
+    final auth = StreamController<SessionUserIdentity?>();
+    final taskChanges = StreamController<void>.broadcast();
+    final controller = SessionController(
+      currentUserProvider: () => current,
+      authChanges: auth.stream,
+      sessionPreparation: (_, _, _) async {},
+      signOutAction: () async {},
+    );
+    await controller.requestPreparation();
+    final notifications = _FakeNotifications();
+    var taskLoads = 0;
+    final scheduler = _scheduler(
+      controller: controller,
+      notifications: notifications,
+      loadTasks: () async {
+        taskLoads++;
+        return const [];
+      },
+      watchTasks: () => taskChanges.stream,
+      syncDelay: Duration.zero,
+    );
+    scheduler.start();
+    addTearDown(() async {
+      await scheduler.dispose();
+      controller.dispose();
+      await auth.close();
+      await taskChanges.close();
+    });
+
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    await scheduler.waitForIdle();
+    final initialLoads = taskLoads;
+
+    taskChanges.add(null);
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    await scheduler.waitForIdle();
+
+    expect(initialLoads, greaterThan(0));
+    expect(taskLoads, initialLoads + 1);
+  });
 }
 
 AcademicNotificationScheduler _scheduler({
   required SessionController controller,
   required _FakeNotifications notifications,
   Future<List<Tarea>> Function()? loadTasks,
+  Stream<void> Function()? watchTasks,
+  Future<List<Evaluacion>> Function()? loadEvaluations,
+  Stream<void> Function()? watchEvaluations,
   Future<void> Function()? beforePreferences,
+  Duration syncDelay = const Duration(days: 1),
 }) {
   return AcademicNotificationScheduler.forTesting(
     sessionController: controller,
@@ -248,6 +339,10 @@ AcademicNotificationScheduler _scheduler({
       return UserPreferences.defaults;
     },
     loadTasks: loadTasks,
+    watchTasks: watchTasks,
+    loadEvaluations: loadEvaluations,
+    watchEvaluations: watchEvaluations,
+    syncDelay: syncDelay,
   );
 }
 

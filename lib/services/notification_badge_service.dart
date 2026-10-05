@@ -32,6 +32,9 @@ class NotificationBadgeService extends ChangeNotifier {
 
   final List<StreamSubscription<QuerySnapshot<Map<String, dynamic>>>>
   _dataSubscriptions = [];
+  StreamSubscription<void>? _subjectsSubscription;
+  StreamSubscription<void>? _tasksSubscription;
+  StreamSubscription<void>? _evaluationsSubscription;
 
   Timer? _debounce;
 
@@ -142,6 +145,12 @@ class NotificationBadgeService extends ChangeNotifier {
     }
 
     _dataSubscriptions.clear();
+    unawaited(_subjectsSubscription?.cancel());
+    _subjectsSubscription = null;
+    unawaited(_tasksSubscription?.cancel());
+    _tasksSubscription = null;
+    unawaited(_evaluationsSubscription?.cancel());
+    _evaluationsSubscription = null;
 
     if (user == null) {
       _setUnreadCount(0);
@@ -152,9 +161,24 @@ class NotificationBadgeService extends ChangeNotifier {
         .collection('usuarios')
         .doc(user.uid);
 
-    _listen(userRef.collection('asignaturas'));
-    _listen(userRef.collection('tareas'));
-    _listen(userRef.collection('evaluaciones'));
+    _subjectsSubscription = _asignaturasService.observarCambios().listen(
+      (_) => _scheduleRefresh(),
+      onError: (_) {
+        // Realtime puede reconectarse sin borrar el último contador visible.
+      },
+    );
+    _tasksSubscription = _tareasService.observarCambios().listen(
+      (_) => _scheduleRefresh(),
+      onError: (_) {
+        // Realtime puede reconectarse sin borrar el último contador visible.
+      },
+    );
+    _evaluationsSubscription = _evaluacionesService.observarCambios().listen(
+      (_) => _scheduleRefresh(),
+      onError: (_) {
+        // Realtime puede reconectarse sin borrar el último contador visible.
+      },
+    );
     _listen(userRef.collection('estadoNotificaciones'));
 
     _scheduleRefresh();
@@ -203,6 +227,12 @@ class NotificationBadgeService extends ChangeNotifier {
     }
 
     _dataSubscriptions.clear();
+    unawaited(_subjectsSubscription?.cancel());
+    _subjectsSubscription = null;
+    unawaited(_tasksSubscription?.cancel());
+    _tasksSubscription = null;
+    unawaited(_evaluationsSubscription?.cancel());
+    _evaluationsSubscription = null;
 
     super.dispose();
   }

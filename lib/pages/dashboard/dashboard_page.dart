@@ -25,6 +25,7 @@ import '../../widgets/app_status_snackbar.dart';
 import '../profile/profile_page.dart';
 import '../settings/settings_page.dart';
 import '../settings/home_customization_page.dart';
+import '../grades/grades_page.dart';
 import '../subjects/subjects_page.dart';
 import '../../services/time_format_service.dart';
 import '../tasks/tasks_page.dart';
@@ -729,6 +730,14 @@ class _DashboardPageState extends State<DashboardPage>
     await _cargarContenido(forzar: true, silencioso: true);
   }
 
+  Future<void> _abrirNotas() async {
+    await Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const GradesPage()));
+
+    if (!mounted) return;
+    await _cargarContenido(forzar: true, silencioso: true);
+  }
+
   Future<void> _abrirTareaEspecifica(Tarea tarea) async {
     await Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => TasksPage(initialTaskId: tarea.id)),
@@ -1112,6 +1121,10 @@ class _DashboardPageState extends State<DashboardPage>
               _abrirAsignaturas();
               break;
 
+            case _ProfileAction.notas:
+              _abrirNotas();
+              break;
+
             case _ProfileAction.tareas:
               _abrirTareas();
               break;
@@ -1136,6 +1149,13 @@ class _DashboardPageState extends State<DashboardPage>
               action: _ProfileAction.asignaturas,
               icon: Icons.menu_book_outlined,
               label: _espanol ? 'Asignaturas' : 'Subjects',
+              oscuro: oscuro,
+            ),
+
+            _profileMenuItem(
+              action: _ProfileAction.notas,
+              icon: Icons.analytics_outlined,
+              label: _espanol ? 'Notas' : 'Grades',
               oscuro: oscuro,
             ),
 
@@ -1240,6 +1260,10 @@ class _DashboardPageState extends State<DashboardPage>
               _abrirAsignaturas();
               break;
 
+            case _ProfileAction.notas:
+              _abrirNotas();
+              break;
+
             case _ProfileAction.tareas:
               _abrirTareas();
               break;
@@ -1266,6 +1290,13 @@ class _DashboardPageState extends State<DashboardPage>
               action: _ProfileAction.asignaturas,
               icon: Icons.menu_book_outlined,
               label: _espanol ? 'Asignaturas' : 'Subjects',
+              oscuro: oscuro,
+            ),
+
+            _profileMenuItem(
+              action: _ProfileAction.notas,
+              icon: Icons.analytics_outlined,
+              label: _espanol ? 'Notas' : 'Grades',
               oscuro: oscuro,
             ),
 
@@ -2868,4 +2899,4 @@ class _DashboardPageState extends State<DashboardPage>
 // ACCIONES MENÚ PERFIL
 // ===========================================================
 
-enum _ProfileAction { perfil, asignaturas, tareas, ajustes, logout }
+enum _ProfileAction { perfil, asignaturas, notas, tareas, ajustes, logout }

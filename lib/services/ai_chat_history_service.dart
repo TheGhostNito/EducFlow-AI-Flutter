@@ -3,7 +3,32 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import '../models/ai_conversation.dart';
 
-class AiChatHistoryService {
+abstract interface class AiChatHistoryRepository {
+  Future<AiConversation?> getConversationToResume();
+
+  Future<AiConversation> createConversation(String firstMessage);
+
+  Future<AiChatMessage> addMessage({
+    required String chatId,
+    required AiChatRole role,
+    required String text,
+    bool isError = false,
+  });
+
+  Future<List<AiChatMessage>> getMessages(String chatId);
+
+  Future<void> markExited(String chatId);
+
+  Future<void> markEntered(String chatId);
+
+  Future<void> archiveConversation(String chatId);
+
+  Future<AiConversation> reactivateConversation(
+    AiConversation conversation,
+  );
+}
+
+class AiChatHistoryService implements AiChatHistoryRepository {
   AiChatHistoryService._();
 
   static final AiChatHistoryService instance =
@@ -47,6 +72,7 @@ class AiChatHistoryService {
   // CHAT ACTIVO / REANUDACIÓN DE 30 MIN
   // =========================================================
 
+  @override
   Future<AiConversation?>
   getConversationToResume() async {
     final QuerySnapshot<Map<String, dynamic>>
@@ -114,6 +140,7 @@ class AiChatHistoryService {
   // CREAR
   // =========================================================
 
+  @override
   Future<AiConversation> createConversation(
     String firstMessage,
   ) async {
@@ -158,6 +185,7 @@ class AiChatHistoryService {
   // MENSAJES
   // =========================================================
 
+  @override
   Future<AiChatMessage> addMessage({
     required String chatId,
     required AiChatRole role,
@@ -214,6 +242,7 @@ class AiChatHistoryService {
     return message;
   }
 
+  @override
   Future<List<AiChatMessage>> getMessages(
     String chatId,
   ) async {
@@ -264,6 +293,7 @@ class AiChatHistoryService {
   // ESTADO
   // =========================================================
 
+  @override
   Future<void> markExited(
     String chatId,
   ) async {
@@ -276,6 +306,7 @@ class AiChatHistoryService {
     );
   }
 
+  @override
   Future<void> markEntered(
     String chatId,
   ) async {
@@ -289,6 +320,7 @@ class AiChatHistoryService {
     );
   }
 
+  @override
   Future<void> archiveConversation(
     String chatId,
   ) async {
@@ -302,6 +334,7 @@ class AiChatHistoryService {
     );
   }
 
+  @override
   Future<AiConversation>
   reactivateConversation(
     AiConversation conversation,

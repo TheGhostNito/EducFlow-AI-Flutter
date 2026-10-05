@@ -53,8 +53,11 @@ class AcademicNotificationScheduler {
           .getCurrentPreferences(forceRefresh: true),
       notificationState: notificationService.obtenerEstado,
       loadSubjects: AsignaturasService.instance.obtenerTodas,
+      watchSubjects: AsignaturasService.instance.observarCambios,
       loadTasks: TareasService.instance.obtenerTodas,
+      watchTasks: TareasService.instance.observarCambios,
       loadEvaluations: EvaluacionesService.instance.obtenerTodas,
+      watchEvaluations: EvaluacionesService.instance.observarCambios,
       loadPendingNotifications: () async {
         final pending = await notificationService.obtenerProgramadas();
         return pending
@@ -88,8 +91,11 @@ class AcademicNotificationScheduler {
     required this._loadPreferences,
     required this._notificationState,
     required this._loadSubjects,
+    required this._watchSubjects,
     required this._loadTasks,
+    required this._watchTasks,
     required this._loadEvaluations,
+    required this._watchEvaluations,
     required this._loadPendingNotifications,
     required this._cancelNotification,
     required this._scheduleNotification,
@@ -107,8 +113,11 @@ class AcademicNotificationScheduler {
     Future<UserPreferences> Function()? loadPreferences,
     Future<EstadoNotificaciones> Function()? notificationState,
     Future<List<Asignatura>> Function()? loadSubjects,
+    Stream<void> Function()? watchSubjects,
     Future<List<Tarea>> Function()? loadTasks,
+    Stream<void> Function()? watchTasks,
     Future<List<Evaluacion>> Function()? loadEvaluations,
+    Stream<void> Function()? watchEvaluations,
     Duration syncDelay = const Duration(days: 1),
   }) {
     return AcademicNotificationScheduler._internal(
@@ -120,8 +129,11 @@ class AcademicNotificationScheduler {
       notificationState:
           notificationState ?? () async => EstadoNotificaciones.activadas,
       loadSubjects: loadSubjects ?? () async => const [],
+      watchSubjects: watchSubjects,
       loadTasks: loadTasks ?? () async => const [],
+      watchTasks: watchTasks,
       loadEvaluations: loadEvaluations ?? () async => const [],
+      watchEvaluations: watchEvaluations,
       loadPendingNotifications: loadPendingNotifications,
       cancelNotification: cancelNotification,
       scheduleNotification: scheduleNotification,
@@ -141,8 +153,11 @@ class AcademicNotificationScheduler {
   final Future<UserPreferences> Function() _loadPreferences;
   final Future<EstadoNotificaciones> Function() _notificationState;
   final Future<List<Asignatura>> Function() _loadSubjects;
+  final Stream<void> Function()? _watchSubjects;
   final Future<List<Tarea>> Function() _loadTasks;
+  final Stream<void> Function()? _watchTasks;
   final Future<List<Evaluacion>> Function() _loadEvaluations;
+  final Stream<void> Function()? _watchEvaluations;
   final Future<List<AcademicPendingNotification>> Function()
   _loadPendingNotifications;
   final Future<void> Function(int id) _cancelNotification;
@@ -153,8 +168,9 @@ class AcademicNotificationScheduler {
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
   _preferencesSubscription;
 
-  final List<StreamSubscription<QuerySnapshot<Map<String, dynamic>>>>
-  _dataSubscriptions = [];
+  StreamSubscription<void>? _subjectsSubscription;
+  StreamSubscription<void>? _tasksSubscription;
+  StreamSubscription<void>? _evaluationsSubscription;
 
   Timer? _debounce;
 
@@ -198,16 +214,46 @@ class AcademicNotificationScheduler {
 
     unawaited(_preferencesSubscription?.cancel());
     _preferencesSubscription = null;
-
-    for (final subscription in _dataSubscriptions) {
-      unawaited(subscription.cancel());
-    }
-
-    _dataSubscriptions.clear();
+    unawaited(_subjectsSubscription?.cancel());
+    _subjectsSubscription = null;
+    unawaited(_tasksSubscription?.cancel());
+    _tasksSubscription = null;
+    unawaited(_evaluationsSubscription?.cancel());
+    _evaluationsSubscription = null;
 
     if (ticket == null) {
       unawaited(_enqueueNotificationWork(_cancelAcademicPending));
       return;
+    }
+
+    final watchSubjects = _watchSubjects;
+    if (watchSubjects != null) {
+      _subjectsSubscription = watchSubjects().listen(
+        (_) => _scheduleSync(),
+        onError: (_) {
+          // Un error temporal de Realtime no invalida recordatorios existentes.
+        },
+      );
+    }
+
+    final watchEvaluations = _watchEvaluations;
+    if (watchEvaluations != null) {
+      _evaluationsSubscription = watchEvaluations().listen(
+        (_) => _scheduleSync(),
+        onError: (_) {
+          // Un error temporal de Realtime no invalida recordatorios existentes.
+        },
+      );
+    }
+
+    final watchTasks = _watchTasks;
+    if (watchTasks != null) {
+      _tasksSubscription = watchTasks().listen(
+        (_) => _scheduleSync(),
+        onError: (_) {
+          // Un error temporal de Realtime no invalida recordatorios existentes.
+        },
+      );
     }
 
     final firestore = _firestore;
@@ -224,25 +270,7 @@ class AcademicNotificationScheduler {
       _scheduleSync();
     }, onError: (_) {});
 
-    _listen(userRef.collection('asignaturas'));
-    _listen(userRef.collection('tareas'));
-    _listen(userRef.collection('evaluaciones'));
-
     _scheduleSync();
-  }
-
-  void _listen(CollectionReference<Map<String, dynamic>> collection) {
-    final subscription = collection.snapshots().listen(
-      (_) {
-        _scheduleSync();
-      },
-      onError: (_) {
-        // Un error temporal de escucha no debe borrar
-        // recordatorios que ya estaban programados.
-      },
-    );
-
-    _dataSubscriptions.add(subscription);
   }
 
   void _scheduleSync() {
@@ -767,12 +795,9 @@ class AcademicNotificationScheduler {
 
     _sessionController.removeListener(_onSessionChanged);
     await _preferencesSubscription?.cancel();
-
-    for (final subscription in _dataSubscriptions) {
-      await subscription.cancel();
-    }
-
-    _dataSubscriptions.clear();
+    await _subjectsSubscription?.cancel();
+    await _tasksSubscription?.cancel();
+    await _evaluationsSubscription?.cancel();
 
     await _notificationWork;
 

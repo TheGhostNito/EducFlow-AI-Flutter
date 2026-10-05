@@ -11,6 +11,7 @@ import '../../widgets/main_section_scroll.dart';
 
 import '../../models/ai_conversation.dart';
 import '../../services/ai_chat_history_service.dart';
+import '../../services/ai_function_calling_flow.dart';
 import '../../services/ai_service.dart';
 import '../../services/beta_notice_service.dart';
 import '../../services/translation_service.dart';
@@ -27,12 +28,16 @@ class AiChatPage extends StatefulWidget {
     this.betaNoticeService,
     this.betaDialogPresenter,
     this.initialConversationLoadOverride,
+    this.aiService,
+    this.historyService,
   });
 
   final SessionController? sessionController;
   final BetaNoticeCoordinator? betaNoticeService;
   final BetaNoticeDialogPresenter? betaDialogPresenter;
   final Future<void> Function()? initialConversationLoadOverride;
+  final AiAssistantClient? aiService;
+  final AiChatHistoryRepository? historyService;
 
   @override
   State<AiChatPage> createState() => _AiChatPageState();
@@ -41,8 +46,8 @@ class AiChatPage extends StatefulWidget {
 class _AiChatPageState extends State<AiChatPage> {
   static const Color _primaryColor = Color(0xFF5B5FEF);
 
-  AiService get _aiService => AiService.instance;
-  AiChatHistoryService get _historyService => AiChatHistoryService.instance;
+  late final AiAssistantClient _aiService;
+  late final AiChatHistoryRepository _historyService;
   late final BetaNoticeCoordinator _betaNoticeService;
   late final SessionController _sessionController;
   final TranslationService _translationService = TranslationService.instance;
@@ -60,6 +65,7 @@ class _AiChatPageState extends State<AiChatPage> {
   bool _sending = false;
   bool _betaDialogInProgress = false;
   bool _betaDialogInvalidated = false;
+  String? _lastFailedMessage;
   GlobalKey? _betaDialogKey;
 
   bool get _spanish => _translationService.isSpanish;
@@ -70,6 +76,8 @@ class _AiChatPageState extends State<AiChatPage> {
 
     _sessionController = widget.sessionController ?? SessionController.instance;
     _betaNoticeService = widget.betaNoticeService ?? BetaNoticeService.instance;
+    _aiService = widget.aiService ?? AiService.instance;
+    _historyService = widget.historyService ?? AiChatHistoryService.instance;
 
     _translationService.addListener(_refreshLanguage);
     _focusNode.addListener(_refreshFocus);
@@ -496,8 +504,11 @@ class _AiChatPageState extends State<AiChatPage> {
     await _sendMessage();
   }
 
-  Future<void> _sendMessage() async {
-    final String text = _messageController.text.trim();
+  Future<void> _sendMessage({
+    String? retryText,
+    bool persistUserMessage = true,
+  }) async {
+    final String text = (retryText ?? _messageController.text).trim();
 
     if (text.isEmpty || _sending) {
       return;
@@ -506,26 +517,30 @@ class _AiChatPageState extends State<AiChatPage> {
     HapticFeedback.selectionClick();
 
     setState(() {
-      _messageController.clear();
+      if (retryText == null) _messageController.clear();
       _sending = true;
     });
 
     try {
       final AiConversation conversation = await _ensureConversation(text);
 
-      final AiChatMessage userMessage = await _historyService.addMessage(
-        chatId: conversation.id,
-        role: AiChatRole.user,
-        text: text,
-      );
+      final AiChatMessage? userMessage = persistUserMessage
+          ? await _historyService.addMessage(
+              chatId: conversation.id,
+              role: AiChatRole.user,
+              text: text,
+            )
+          : null;
 
       if (!mounted) {
         return;
       }
 
-      setState(() {
-        _messages.add(userMessage);
-      });
+      if (userMessage != null) {
+        setState(() {
+          _messages.add(userMessage);
+        });
+      }
 
       _scrollToBottom();
 
@@ -543,6 +558,7 @@ class _AiChatPageState extends State<AiChatPage> {
 
       setState(() {
         _messages.add(assistantMessage);
+        _lastFailedMessage = null;
       });
     } catch (error, stackTrace) {
       debugPrint('EducFlow AI error: $error');
@@ -553,9 +569,16 @@ class _AiChatPageState extends State<AiChatPage> {
         return;
       }
 
-      final String errorText = _spanish
-          ? 'No pude responder en este momento. Inténtalo nuevamente.'
-          : 'I could not respond right now. Please try again.';
+      final bool timeout = error is AiRequestTimeoutException;
+      final String errorText = timeout
+          ? (_spanish
+                ? 'La consulta tardó más de ${AiFunctionCallingFlow.defaultTimeout.inSeconds} segundos. Puedes reintentarla sin perder tu mensaje.'
+                : 'The request took longer than ${AiFunctionCallingFlow.defaultTimeout.inSeconds} seconds. You can retry without losing your message.')
+          : (_spanish
+                ? 'No pude responder en este momento. Inténtalo nuevamente.'
+                : 'I could not respond right now. Please try again.');
+
+      _lastFailedMessage = text;
 
       final AiConversation? conversation = _conversation;
 
@@ -598,6 +621,12 @@ class _AiChatPageState extends State<AiChatPage> {
         _scrollToBottom();
       }
     }
+  }
+
+  Future<void> _retryLastMessage() async {
+    final text = _lastFailedMessage;
+    if (text == null || text.isEmpty || _sending) return;
+    await _sendMessage(retryText: text, persistUserMessage: false);
   }
 
   void _scrollToBottom() {
@@ -1184,13 +1213,27 @@ class _AiChatPageState extends State<AiChatPage> {
           color: dark ? const Color(0xFF513036) : const Color(0xFFF3CACA),
         ),
       ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: dark ? const Color(0xFFF0C5C5) : const Color(0xFF991B1B),
-          fontSize: 13.5,
-          height: 1.45,
-        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            text,
+            style: TextStyle(
+              color: dark ? const Color(0xFFF0C5C5) : const Color(0xFF991B1B),
+              fontSize: 13.5,
+              height: 1.45,
+            ),
+          ),
+          if (_lastFailedMessage != null) ...[
+            const SizedBox(height: 8),
+            TextButton.icon(
+              key: const ValueKey('retry-ai-message'),
+              onPressed: _sending ? null : _retryLastMessage,
+              icon: const Icon(Icons.refresh_rounded, size: 18),
+              label: Text(_spanish ? 'Reintentar' : 'Retry'),
+            ),
+          ],
+        ],
       ),
     );
   }
