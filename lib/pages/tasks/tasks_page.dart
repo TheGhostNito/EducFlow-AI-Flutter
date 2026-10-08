@@ -16,10 +16,17 @@ import '../../widgets/app_status_snackbar.dart';
 import 'widgets/task_edit_sheet.dart';
 import 'widgets/task_detail_sheet.dart';
 
+List<Tarea> filterTasksForSubject(Iterable<Tarea> tasks, String? subjectId) {
+  final String id = subjectId?.trim() ?? '';
+  if (id.isEmpty) return List<Tarea>.of(tasks);
+  return tasks.where((item) => item.asignaturaId == id).toList();
+}
+
 class TasksPage extends StatefulWidget {
-  const TasksPage({this.initialTaskId, super.key});
+  const TasksPage({this.initialTaskId, this.initialSubjectId, super.key});
 
   final String? initialTaskId;
+  final String? initialSubjectId;
 
   @override
   State<TasksPage> createState() => _TasksPageState();
@@ -51,8 +58,26 @@ class _TasksPageState extends State<TasksPage> {
 
   bool get _espanol => _translationService.isSpanish;
 
+  String? get _subjectId {
+    final String value = widget.initialSubjectId?.trim() ?? '';
+    return value.isEmpty ? null : value;
+  }
+
+  List<Tarea> get _tareasContexto {
+    return filterTasksForSubject(_tareas, _subjectId);
+  }
+
+  String? get _nombreAsignaturaContexto {
+    final String? subjectId = _subjectId;
+    if (subjectId == null) return null;
+    for (final Asignatura subject in _asignaturas) {
+      if (subject.id == subjectId) return subject.nombre;
+    }
+    return null;
+  }
+
   List<Tarea> get _tareasVisibles {
-    return _tareas.where((tarea) {
+    return _tareasContexto.where((tarea) {
       if (_mostrarCompletadas) {
         return tarea.completada;
       }
@@ -61,9 +86,11 @@ class _TasksPageState extends State<TasksPage> {
     }).toList();
   }
 
-  int get _pendientes => _tareas.where((tarea) => tarea.pendiente).length;
+  int get _pendientes =>
+      _tareasContexto.where((tarea) => tarea.pendiente).length;
 
-  int get _completadas => _tareas.where((tarea) => tarea.completada).length;
+  int get _completadas =>
+      _tareasContexto.where((tarea) => tarea.completada).length;
 
   @override
   void initState() {
@@ -201,6 +228,7 @@ class _TasksPageState extends State<TasksPage> {
       context: context,
       subjects: _asignaturas,
       spanish: _espanol,
+      initialSubjectId: _subjectId,
     );
 
     if (!mounted || result == null) {
@@ -810,7 +838,11 @@ class _TasksPageState extends State<TasksPage> {
                   const SizedBox(height: 5),
 
                   Text(
-                    _espanol ? 'Mis tareas' : 'My tasks',
+                    _nombreAsignaturaContexto == null
+                        ? (_espanol ? 'Mis tareas' : 'My tasks')
+                        : (_espanol
+                              ? 'Tareas de ${_nombreAsignaturaContexto!}'
+                              : '${_nombreAsignaturaContexto!} tasks'),
                     style: TextStyle(
                       color: oscuro
                           ? const Color(0xFFF8FAFC)
@@ -824,9 +856,13 @@ class _TasksPageState extends State<TasksPage> {
                   const SizedBox(height: 8),
 
                   Text(
-                    _espanol
-                        ? 'Organiza entregas y pendientes de tus asignaturas.'
-                        : 'Organize assignments and pending work for your subjects.',
+                    _nombreAsignaturaContexto == null
+                        ? (_espanol
+                              ? 'Organiza entregas y pendientes de tus asignaturas.'
+                              : 'Organize assignments and pending work for your subjects.')
+                        : (_espanol
+                              ? 'Organiza las entregas y pendientes de esta asignatura.'
+                              : 'Organize assignments and pending work for this subject.'),
                     style: TextStyle(
                       color: oscuro
                           ? const Color(0xFFA9B1BF)

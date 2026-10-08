@@ -4,11 +4,19 @@ import 'package:flutter/material.dart';
 import '../../pages/ai/ai_chat_page.dart';
 import '../../pages/calendar/calendar_page.dart';
 import '../../pages/dashboard/dashboard_page.dart';
+import '../../pages/evaluations/evaluations_page.dart';
 import '../../pages/notifications/notifications_page.dart';
 import '../../pages/schedule/schedule_page.dart';
 import '../../services/notification_service.dart';
 
-enum SeccionPrincipal { inicio, horario, ia, calendario, notificaciones }
+enum SeccionPrincipal {
+  inicio,
+  horario,
+  ia,
+  calendario,
+  notificaciones,
+  evaluaciones,
+}
 
 typedef MainSectionBuilder = Widget Function(
   BuildContext context,
@@ -41,10 +49,10 @@ class MainNavigation extends StatefulWidget {
     final state = context.findAncestorStateOfType<_MainNavigationState>();
     assert(
       state != null,
-      'El Calendario debe abrirse dentro de MainNavigation.',
+      'Evaluaciones debe abrirse dentro de MainNavigation.',
     );
     state?._select(
-      SeccionPrincipal.calendario,
+      SeccionPrincipal.evaluaciones,
       payload: 'evaluation:${evaluationId.trim()}',
     );
   }
@@ -112,13 +120,15 @@ class _MainNavigationState extends State<MainNavigation> {
       SeccionPrincipal.inicio => const DashboardPage(),
       SeccionPrincipal.horario => const SchedulePage(),
       SeccionPrincipal.ia => const AiChatPage(),
-      SeccionPrincipal.calendario => CalendarPage(
+      SeccionPrincipal.calendario => const CalendarPage(),
+      SeccionPrincipal.notificaciones => NotificationsPage(
+        initialPayload: payload,
+      ),
+      SeccionPrincipal.evaluaciones => EvaluationsPage(
         initialEvaluationId: payload?.startsWith('evaluation:') == true
             ? payload!.substring('evaluation:'.length)
             : null,
-      ),
-      SeccionPrincipal.notificaciones => NotificationsPage(
-        initialPayload: payload,
+        onBack: () => _select(SeccionPrincipal.inicio),
       ),
     };
   }

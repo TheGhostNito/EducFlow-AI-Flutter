@@ -12,6 +12,8 @@ import '../../widgets/app_pressable.dart';
 import '../../widgets/app_reveal.dart';
 import '../../widgets/app_scroll_header.dart';
 import '../../widgets/app_status_snackbar.dart';
+import '../evaluations/evaluations_page.dart';
+import '../tasks/tasks_page.dart';
 import 'widgets/subject_edit_panel.dart';
 import '../../services/horario_conflict_service.dart';
 import '../../services/time_format_service.dart';
@@ -302,6 +304,28 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
     HapticFeedback.selectionClick();
 
     Navigator.of(context).maybePop();
+  }
+
+  Future<void> _abrirEvaluaciones() async {
+    final Asignatura? asignatura = _asignatura;
+    if (asignatura == null) return;
+    HapticFeedback.selectionClick();
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => EvaluationsPage(initialSubjectId: asignatura.id),
+      ),
+    );
+  }
+
+  Future<void> _abrirTareas() async {
+    final Asignatura? asignatura = _asignatura;
+    if (asignatura == null) return;
+    HapticFeedback.selectionClick();
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => TasksPage(initialSubjectId: asignatura.id),
+      ),
+    );
   }
 
   void _iniciarEdicion() {
@@ -1098,7 +1122,7 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
 
                               AppReveal(
                                 delay: const Duration(milliseconds: 220),
-                                child: _buildFutureTools(oscuro),
+                                child: _buildSubjectTools(oscuro),
                               ),
                             ],
                           ),
@@ -1797,34 +1821,36 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
   }
 
   // =========================================================
-  // HERRAMIENTAS FUTURAS
+  // HERRAMIENTAS DE LA ASIGNATURA
   // =========================================================
 
-  Widget _buildFutureTools(bool oscuro) {
+  Widget _buildSubjectTools(bool oscuro) {
     return _buildSection(
       oscuro: oscuro,
       eyebrow: _espanol ? 'HERRAMIENTAS' : 'TOOLS',
       title: _espanol ? 'Para esta asignatura' : 'For this subject',
       child: Column(
         children: [
-          _buildFutureTool(
+          _buildSubjectTool(
             oscuro: oscuro,
             icon: Icons.assignment_outlined,
             title: _espanol ? 'Evaluaciones' : 'Assessments',
+            onTap: _abrirEvaluaciones,
           ),
 
           const SizedBox(height: 10),
 
-          _buildFutureTool(
+          _buildSubjectTool(
             oscuro: oscuro,
             icon: Icons.check_box_outlined,
             title: _espanol ? 'Tareas' : 'Tasks',
+            onTap: _abrirTareas,
           ),
 
           if (_esSuperior) ...[
             const SizedBox(height: 10),
 
-            _buildFutureTool(
+            _buildSubjectTool(
               oscuro: oscuro,
               icon: Icons.account_tree_outlined,
               title: _espanol ? 'Prerrequisitos' : 'Prerequisites',
@@ -1833,37 +1859,38 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
 
           const SizedBox(height: 10),
 
-          _buildFutureTool(
+          _buildSubjectTool(
             oscuro: oscuro,
             icon: Icons.auto_awesome_outlined,
-            title: 'EduFlow AI',
+            title: 'EducFlow AI',
           ),
         ],
       ),
     );
   }
 
-  Widget _buildFutureTool({
+  Widget _buildSubjectTool({
     required bool oscuro,
     required IconData icon,
     required String title,
+    VoidCallback? onTap,
   }) {
-    return Container(
+    final Widget content = Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 14),
       decoration: BoxDecoration(
         color: oscuro ? const Color(0xFF202631) : const Color(0xFFFAFBFC),
         borderRadius: BorderRadius.circular(15),
         border: Border.all(
-          color: oscuro ? const Color(0xFF343C48) : const Color(0xFFE7EAF0),
+          color: onTap != null
+              ? (oscuro ? const Color(0xFF454D78) : const Color(0xFFD8DAFF))
+              : (oscuro ? const Color(0xFF343C48) : const Color(0xFFE7EAF0)),
         ),
       ),
       child: Row(
         children: [
           Icon(icon, color: _primaryColor, size: 21),
-
           const SizedBox(width: 12),
-
           Expanded(
             child: Text(
               title,
@@ -1875,16 +1902,42 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
               ),
             ),
           ),
-
-          Text(
-            _espanol ? 'Próximamente' : 'Coming soon',
-            style: TextStyle(
-              color: oscuro ? const Color(0xFF7F899A) : const Color(0xFF9CA3AF),
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
+          if (onTap == null)
+            Text(
+              _espanol ? 'Próximamente' : 'Coming soon',
+              style: TextStyle(
+                color: oscuro
+                    ? const Color(0xFF7F899A)
+                    : const Color(0xFF9CA3AF),
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            )
+          else ...[
+            Text(
+              _espanol ? 'Abrir' : 'Open',
+              style: const TextStyle(
+                color: _primaryColor,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-          ),
+            const SizedBox(width: 4),
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: _primaryColor,
+              size: 20,
+            ),
+          ],
         ],
+      ),
+    );
+    if (onTap == null) return content;
+    return AppPressable(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(15),
+        child: content,
       ),
     );
   }

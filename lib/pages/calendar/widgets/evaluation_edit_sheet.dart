@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../../models/asignatura.dart';
 import '../../../models/evaluacion.dart';
 import '../../../services/time_format_service.dart';
+import '../../../widgets/academic_schedule_picker.dart';
 
 class EvaluationEditResult {
   const EvaluationEditResult({
@@ -30,12 +31,20 @@ class EvaluationEditResult {
   final double? weight;
 }
 
+DateTime suggestEvaluationDateForClassDay(
+  DateTime selectedDate,
+  DiaSemana day,
+) {
+  return suggestAcademicDateForDay(selectedDate, day);
+}
+
 Future<EvaluationEditResult?> showEvaluationEditSheet({
   required BuildContext context,
   required List<Asignatura> subjects,
   required bool spanish,
   required DateTime initialDate,
   Evaluacion? evaluation,
+  String? initialSubjectId,
 }) {
   return showModalBottomSheet<EvaluationEditResult>(
     context: context,
@@ -49,6 +58,7 @@ Future<EvaluationEditResult?> showEvaluationEditSheet({
         spanish: spanish,
         initialDate: initialDate,
         evaluation: evaluation,
+        initialSubjectId: initialSubjectId,
       );
     },
   );
@@ -60,12 +70,14 @@ class _EvaluationEditSheet extends StatefulWidget {
     required this.spanish,
     required this.initialDate,
     this.evaluation,
+    this.initialSubjectId,
   });
 
   final List<Asignatura> subjects;
   final bool spanish;
   final DateTime initialDate;
   final Evaluacion? evaluation;
+  final String? initialSubjectId;
 
   @override
   State<_EvaluationEditSheet> createState() => _EvaluationEditSheetState();
@@ -78,6 +90,19 @@ class _EvaluationEditSheetState extends State<_EvaluationEditSheet> {
 
   bool get _editing => widget.evaluation != null;
 
+  Asignatura? get _selectedSubject {
+    final String? id = _subjectId;
+    if (id == null) return null;
+    for (final Asignatura subject in widget.subjects) {
+      if (subject.id == id) return subject;
+    }
+    return null;
+  }
+
+  List<BloqueHorario> get _availableClassBlocks {
+    return validAcademicBlocks(_selectedSubject);
+  }
+
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _weightController = TextEditingController();
@@ -87,6 +112,8 @@ class _EvaluationEditSheetState extends State<_EvaluationEditSheet> {
 
   late DateTime _date;
   TimeOfDay? _time;
+  bool _usingClassSchedule = false;
+  BloqueHorario? _selectedClassBlock;
 
   bool _showErrors = false;
 
@@ -101,7 +128,7 @@ class _EvaluationEditSheetState extends State<_EvaluationEditSheet> {
 
     _titleController.text = evaluation?.titulo ?? '';
     _descriptionController.text = evaluation?.descripcion ?? '';
-    _subjectId = evaluation?.asignaturaId;
+    _subjectId = evaluation?.asignaturaId ?? widget.initialSubjectId;
     _type = evaluation?.tipo ?? TipoEvaluacion.prueba;
     _time = _parseStoredTime(evaluation?.hora);
 
@@ -225,6 +252,32 @@ class _EvaluationEditSheetState extends State<_EvaluationEditSheet> {
         '${time.minute.toString().padLeft(2, '0')}';
   }
 
+  String _dayName(DiaSemana day) {
+    return switch (day) {
+      DiaSemana.lunes => widget.spanish ? 'Lunes' : 'Monday',
+      DiaSemana.martes => widget.spanish ? 'Martes' : 'Tuesday',
+      DiaSemana.miercoles => widget.spanish ? 'Miércoles' : 'Wednesday',
+      DiaSemana.jueves => widget.spanish ? 'Jueves' : 'Thursday',
+      DiaSemana.viernes => widget.spanish ? 'Viernes' : 'Friday',
+      DiaSemana.sabado => widget.spanish ? 'Sábado' : 'Saturday',
+    };
+  }
+
+  String _classBlockDescription(BloqueHorario block) {
+    final String start = _timeFormatService.formatStoredTime(
+      context,
+      block.horaInicio,
+    );
+    final String end = _timeFormatService.formatStoredTime(
+      context,
+      block.horaFin,
+    );
+    final String room = block.sala?.trim().isNotEmpty == true
+        ? block.sala!.trim()
+        : (_selectedSubject?.sala?.trim() ?? '');
+    return room.isEmpty ? '$start – $end' : '$start – $end · $room';
+  }
+
   Future<void> _chooseSubject() async {
     HapticFeedback.selectionClick();
 
@@ -295,6 +348,7 @@ class _EvaluationEditSheetState extends State<_EvaluationEditSheet> {
                     final bool selected = subject.id == _subjectId;
 
                     return InkWell(
+                      key: ValueKey('evaluation-subject-${subject.id}'),
                       borderRadius: BorderRadius.circular(15),
                       onTap: () {
                         HapticFeedback.selectionClick();
@@ -363,21 +417,204 @@ class _EvaluationEditSheetState extends State<_EvaluationEditSheet> {
     }
 
     setState(() {
+      if (_subjectId != selected) {
+        _usingClassSchedule = false;
+        _selectedClassBlock = null;
+      }
       _subjectId = selected;
+    });
+  }
+
+  Future<void> _chooseClassBlock() async {
+    final List<BloqueHorario> blocks = _availableClassBlocks;
+    if (blocks.isEmpty) return;
+    HapticFeedback.selectionClick();
+    final BloqueHorario? selected = await showModalBottomSheet<BloqueHorario>(
+      context: context,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.78),
+      builder: (sheetContext) {
+        final bool dark = Theme.of(sheetContext).brightness == Brightness.dark;
+        return Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.68,
+          ),
+          padding: const EdgeInsets.fromLTRB(14, 10, 14, 20),
+          decoration: BoxDecoration(
+            color: dark ? const Color(0xFF18181D) : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            border: Border(
+              top: BorderSide(
+                color: dark ? const Color(0xFF303038) : const Color(0xFFE7EAF0),
+              ),
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 42,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: dark
+                      ? const Color(0xFF4B4B53)
+                      : const Color(0xFFD5D9E0),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.spanish
+                              ? 'Horario de la asignatura'
+                              : 'Subject schedule',
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          _selectedSubject?.nombre ?? '',
+                          style: const TextStyle(
+                            color: _evaluationColor,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(sheetContext).pop(),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: blocks.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 8),
+                  itemBuilder: (_, index) {
+                    final BloqueHorario block = blocks[index];
+                    final bool active = identical(block, _selectedClassBlock);
+                    return InkWell(
+                      key: ValueKey('evaluation-class-block-$index'),
+                      borderRadius: BorderRadius.circular(15),
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        Navigator.of(sheetContext).pop(block);
+                      },
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 160),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: active
+                              ? (dark
+                                    ? const Color(0xFF292936)
+                                    : const Color(0xFFF3EEFF))
+                              : (dark
+                                    ? const Color(0xFF222229)
+                                    : const Color(0xFFFAFBFC)),
+                          borderRadius: BorderRadius.circular(15),
+                          border: Border.all(
+                            color: active
+                                ? _evaluationColor
+                                : (dark
+                                      ? const Color(0xFF34343C)
+                                      : const Color(0xFFE7EAF0)),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.schedule_rounded,
+                              color: _evaluationColor,
+                              size: 22,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _dayName(block.dia),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    _classBlockDescription(block),
+                                    style: TextStyle(
+                                      color: dark
+                                          ? const Color(0xFFA9B1BF)
+                                          : const Color(0xFF6B7280),
+                                      fontSize: 12.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (active)
+                              const Icon(
+                                Icons.check_circle_rounded,
+                                color: _evaluationColor,
+                              ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    if (!mounted || selected == null) return;
+    final TimeOfDay? startTime = _parseStoredTime(selected.horaInicio);
+    if (startTime == null) return;
+    setState(() {
+      _usingClassSchedule = true;
+      _selectedClassBlock = selected;
+      _date = suggestAcademicDateForDay(
+        _date,
+        selected.dia,
+        notBefore: DateTime.now(),
+      );
+      _time = startTime;
     });
   }
 
   Future<void> _chooseDate() async {
     HapticFeedback.selectionClick();
 
+    final DateTime now = academicDateOnly(DateTime.now());
+    final BloqueHorario? restrictedBlock = _usingClassSchedule
+        ? _selectedClassBlock
+        : null;
+
     final DateTime? result = await showDatePicker(
       context: context,
       initialDate: _date,
-      firstDate: DateTime(DateTime.now().year - 1),
-      lastDate: DateTime(DateTime.now().year + 10),
+      firstDate: restrictedBlock == null ? DateTime(now.year - 1) : now,
+      lastDate: DateTime(now.year + 10),
       helpText: widget.spanish ? 'Fecha de evaluación' : 'Evaluation date',
       cancelText: widget.spanish ? 'Cancelar' : 'Cancel',
       confirmText: widget.spanish ? 'Aceptar' : 'OK',
+      selectableDayPredicate: restrictedBlock == null
+          ? null
+          : (date) =>
+                academicDateIsSelectable(date, restrictedBlock, notBefore: now),
     );
 
     if (!mounted || result == null) {
@@ -601,6 +838,7 @@ class _EvaluationEditSheetState extends State<_EvaluationEditSheet> {
               ),
               const SizedBox(height: 14),
               _selectorField(
+                fieldKey: const ValueKey('evaluation-subject-field'),
                 dark: dark,
                 label: widget.spanish ? 'Asignatura *' : 'Subject *',
                 value: _subjectName(),
@@ -703,7 +941,21 @@ class _EvaluationEditSheetState extends State<_EvaluationEditSheet> {
                 ),
               ),
               const SizedBox(height: 14),
+              Text(
+                widget.spanish ? 'Fecha y hora' : 'Date and time',
+                style: TextStyle(
+                  color: dark
+                      ? const Color(0xFFC4CAD4)
+                      : const Color(0xFF4B5563),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 9),
+              _buildSchedulingOptions(),
+              const SizedBox(height: 14),
               _selectorField(
+                fieldKey: const ValueKey('evaluation-date-field'),
                 dark: dark,
                 label: widget.spanish ? 'Fecha' : 'Date',
                 value: _displayDate(_date),
@@ -712,6 +964,7 @@ class _EvaluationEditSheetState extends State<_EvaluationEditSheet> {
               ),
               const SizedBox(height: 14),
               _selectorField(
+                fieldKey: const ValueKey('evaluation-time-field'),
                 dark: dark,
                 label: widget.spanish ? 'Hora' : 'Time',
                 value: _time == null
@@ -725,6 +978,8 @@ class _EvaluationEditSheetState extends State<_EvaluationEditSheet> {
                         HapticFeedback.selectionClick();
                         setState(() {
                           _time = null;
+                          _usingClassSchedule = false;
+                          _selectedClassBlock = null;
                         });
                       },
               ),
@@ -803,7 +1058,29 @@ class _EvaluationEditSheetState extends State<_EvaluationEditSheet> {
     );
   }
 
+  Widget _buildSchedulingOptions() {
+    return AcademicScheduleModePanel(
+      keyPrefix: 'evaluation',
+      spanish: widget.spanish,
+      accentColor: _evaluationColor,
+      subject: _selectedSubject,
+      blocks: _availableClassBlocks,
+      usingSchedule: _usingClassSchedule,
+      selectedBlock: _selectedClassBlock,
+      onManualSelected: () {
+        HapticFeedback.selectionClick();
+        setState(() {
+          _usingClassSchedule = false;
+          _selectedClassBlock = null;
+        });
+      },
+      onScheduleSelected: _chooseClassBlock,
+      onChangeBlock: _chooseClassBlock,
+    );
+  }
+
   Widget _selectorField({
+    Key? fieldKey,
     required bool dark,
     required String label,
     required String value,
@@ -813,6 +1090,7 @@ class _EvaluationEditSheetState extends State<_EvaluationEditSheet> {
     bool error = false,
   }) {
     return InkWell(
+      key: fieldKey,
       onTap: onTap,
       borderRadius: BorderRadius.circular(14),
       child: Container(

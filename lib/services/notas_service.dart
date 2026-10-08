@@ -1,6 +1,7 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:supabase_flutter/supabase_flutter.dart'
-    show Supabase, SupabaseClient;
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/nota.dart';
 import '../models/asignatura.dart';
@@ -27,6 +28,16 @@ class DatosNotasUsuario {
   final NivelEducativoPerfil nivelEducativo;
 }
 
+class DatosCalificacionesEvaluaciones {
+  const DatosCalificacionesEvaluaciones({
+    required this.configuracion,
+    required this.calificaciones,
+  });
+
+  final ConfiguracionNotas configuracion;
+  final Map<String, CalificacionEvaluacion> calificaciones;
+}
+
 abstract interface class NotasDataSource {
   Future<List<Map<String, dynamic>>> obtenerAsignaturas(String uid);
   Future<List<Map<String, dynamic>>> obtenerEvaluaciones(String uid);
@@ -51,6 +62,44 @@ class SupabaseNotasDataSource implements NotasDataSource {
   SupabaseNotasDataSource(this._supabase);
 
   final SupabaseClient _supabase;
+  static int _canalCalificacionesSecuencia = 0;
+
+  Stream<void> observarCambiosCalificaciones(String uid) {
+    RealtimeChannel? canal;
+    late StreamController<void> controlador;
+
+    controlador = StreamController<void>(
+      onListen: () {
+        canal = _supabase
+            .channel(
+              'notas-evaluaciones-$uid-${_canalCalificacionesSecuencia++}',
+            )
+            .onPostgresChanges(
+              event: PostgresChangeEvent.all,
+              schema: 'public',
+              table: 'notas_evaluaciones',
+              filter: PostgresChangeFilter(
+                type: PostgresChangeFilterType.eq,
+                column: 'usuario_uid',
+                value: uid,
+              ),
+              callback: (_) {
+                if (!controlador.isClosed) controlador.add(null);
+              },
+            )
+            .subscribe((estado, error) {
+              if (error != null && !controlador.isClosed) {
+                controlador.addError(error);
+              }
+            });
+      },
+      onCancel: () async {
+        final RealtimeChannel? canalActual = canal;
+        if (canalActual != null) await _supabase.removeChannel(canalActual);
+      },
+    );
+    return controlador.stream;
+  }
 
   @override
   Future<List<Map<String, dynamic>>> obtenerAsignaturas(String uid) async {
@@ -219,6 +268,44 @@ class NotasService {
       throw StateError('No existe un usuario autenticado.');
     }
     return usuario.uid;
+  }
+
+  Future<DatosCalificacionesEvaluaciones>
+  obtenerCalificacionesEvaluaciones() async {
+    final String uid = _uid;
+    final resultados = await Future.wait<Object?>([
+      _dataSource.obtenerConfiguracion(uid),
+      _dataSource.obtenerCalificaciones(uid),
+    ]);
+    final configuracionMap = resultados[0] as Map<String, dynamic>?;
+    final calificacionesMap = resultados[1] as List<Map<String, dynamic>>;
+    final ConfiguracionNotas configuracion = configuracionMap == null
+        ? ConfiguracionNotas.predeterminada
+        : ConfiguracionNotas.fromMap(configuracionMap);
+    if (!configuracion.esValida) {
+      throw const FormatException(
+        'La configuración de notas almacenada no es válida.',
+      );
+    }
+    final calificaciones = <String, CalificacionEvaluacion>{};
+    for (final map in calificacionesMap) {
+      final CalificacionEvaluacion item = CalificacionEvaluacion.fromMap(map);
+      if (item.evaluacionId.isNotEmpty) {
+        calificaciones[item.evaluacionId] = item;
+      }
+    }
+    return DatosCalificacionesEvaluaciones(
+      configuracion: configuracion,
+      calificaciones: Map.unmodifiable(calificaciones),
+    );
+  }
+
+  Stream<void> observarCambiosCalificaciones() {
+    final NotasDataSource dataSource = _dataSource;
+    if (dataSource is SupabaseNotasDataSource) {
+      return dataSource.observarCambiosCalificaciones(_uid);
+    }
+    return const Stream<void>.empty();
   }
 
   Future<DatosNotasUsuario> obtenerDatos() async {

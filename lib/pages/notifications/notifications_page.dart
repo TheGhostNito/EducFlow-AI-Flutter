@@ -1143,6 +1143,19 @@ class _NotificationsPageState extends State<NotificationsPage> {
         mensaje: _espanol ? 'Evaluación eliminada.' : 'Evaluation deleted.',
         tipo: AppStatusType.success,
       );
+    } on EvaluacionConNotaException {
+      if (!mounted) {
+        return;
+      }
+
+      HapticFeedback.heavyImpact();
+
+      _mostrarEstado(
+        mensaje: _espanol
+            ? 'No puedes eliminar esta evaluación porque tiene una nota asociada.'
+            : 'This evaluation cannot be deleted because it has an associated grade.',
+        tipo: AppStatusType.error,
+      );
     } catch (_) {
       if (!mounted) {
         return;

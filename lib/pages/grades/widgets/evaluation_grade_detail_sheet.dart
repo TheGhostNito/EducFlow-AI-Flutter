@@ -7,7 +7,6 @@ Future<bool> showEvaluationGradeDetails({
   required Evaluacion evaluacion,
   required String grade,
   required String weight,
-  required String contribution,
   required bool spanish,
   required bool isFinalExam,
 }) async {
@@ -19,7 +18,6 @@ Future<bool> showEvaluationGradeDetails({
           evaluacion: evaluacion,
           grade: grade,
           weight: weight,
-          contribution: contribution,
           spanish: spanish,
           isFinalExam: isFinalExam,
         ),
@@ -32,7 +30,6 @@ class _EvaluationGradeDetail extends StatelessWidget {
     required this.evaluacion,
     required this.grade,
     required this.weight,
-    required this.contribution,
     required this.spanish,
     required this.isFinalExam,
   });
@@ -40,7 +37,6 @@ class _EvaluationGradeDetail extends StatelessWidget {
   final Evaluacion evaluacion;
   final String grade;
   final String weight;
-  final String contribution;
   final bool spanish;
   final bool isFinalExam;
 
@@ -100,22 +96,7 @@ class _EvaluationGradeDetail extends StatelessWidget {
             const SizedBox(height: 6),
             Text(spanish ? 'Nota obtenida' : 'Grade earned'),
             const SizedBox(height: 20),
-            Row(
-              children: [
-                Expanded(
-                  child: _Metric(
-                    label: spanish ? 'Ponderación' : 'Weight',
-                    value: weight,
-                  ),
-                ),
-                Expanded(
-                  child: _Metric(
-                    label: spanish ? 'Aporte' : 'Contribution',
-                    value: contribution,
-                  ),
-                ),
-              ],
-            ),
+            _Metric(label: spanish ? 'Ponderación' : 'Weight', value: weight),
             const SizedBox(height: 24),
             FilledButton.icon(
               key: const ValueKey('edit-evaluation-grade'),

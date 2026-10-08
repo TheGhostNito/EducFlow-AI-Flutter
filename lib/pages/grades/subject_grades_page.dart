@@ -198,9 +198,6 @@ class _SubjectGradesPageState extends State<SubjectGradesPage> {
     final double? weight = isExam
         ? _configuracionCalculo.pesoExamen
         : evaluacion.ponderacion;
-    final contribution = grade != null && weight != null
-        ? grade * weight / 100
-        : null;
     final edit = await showEvaluationGradeDetails(
       context: context,
       evaluacion: evaluacion,
@@ -208,7 +205,6 @@ class _SubjectGradesPageState extends State<SubjectGradesPage> {
           ? (_espanol ? 'Pendiente' : 'Pending')
           : _numero(grade),
       weight: weight == null ? '—' : _porcentaje(weight),
-      contribution: _numero(contribution),
       spanish: _espanol,
       isFinalExam: isExam,
     );
@@ -445,35 +441,21 @@ class _SubjectGradesPageState extends State<SubjectGradesPage> {
             if (resultado.esquema ==
                 EsquemaCalculoNotas.presentacionExamen) ...[
               const Divider(height: 28),
-              Wrap(
-                spacing: 28,
-                runSpacing: 16,
+              Row(
                 children: [
-                  _summaryMetric(
-                    oscuro,
-                    _espanol
-                        ? 'Presentación (${_porcentaje(resultado.pesoPresentacion)})'
-                        : 'Coursework (${_porcentaje(resultado.pesoPresentacion)})',
-                    _numero(resultado.notaPresentacion),
+                  Expanded(
+                    child: _summaryMetric(
+                      oscuro,
+                      _espanol ? 'Presentación' : 'Coursework',
+                      _numero(resultado.notaPresentacion),
+                    ),
                   ),
-                  _summaryMetric(
-                    oscuro,
-                    _espanol
-                        ? 'Examen (${_porcentaje(resultado.pesoExamen)})'
-                        : 'Exam (${_porcentaje(resultado.pesoExamen)})',
-                    _numero(resultado.notaExamen),
-                  ),
-                  _summaryMetric(
-                    oscuro,
-                    _espanol
-                        ? 'Aporte presentación'
-                        : 'Coursework contribution',
-                    _numero(resultado.aportePresentacion),
-                  ),
-                  _summaryMetric(
-                    oscuro,
-                    _espanol ? 'Aporte examen' : 'Exam contribution',
-                    _numero(resultado.aporteExamen),
+                  Expanded(
+                    child: _summaryMetric(
+                      oscuro,
+                      _espanol ? 'Examen' : 'Exam',
+                      _numero(resultado.notaExamen),
+                    ),
                   ),
                 ],
               ),
@@ -518,13 +500,6 @@ class _SubjectGradesPageState extends State<SubjectGradesPage> {
                     oscuro,
                     _espanol ? 'Promedio parcial' : 'Current average',
                     _numero(resultado.promedioParcial),
-                  ),
-                ),
-                Expanded(
-                  child: _summaryMetric(
-                    oscuro,
-                    _espanol ? 'Aporte final' : 'Final contribution',
-                    _numero(resultado.aporteAcumulado),
                   ),
                 ),
                 Expanded(
@@ -884,9 +859,6 @@ class _SubjectGradesPageState extends State<SubjectGradesPage> {
     final double? weight = isExam
         ? _configuracionCalculo.pesoExamen
         : evaluacion.ponderacion;
-    final contribution = grade != null && weight != null
-        ? grade * weight / 100
-        : null;
     final saving = _guardando.contains(evaluacion.id);
     return AppPressable(
       child: InkWell(
@@ -932,11 +904,6 @@ class _SubjectGradesPageState extends State<SubjectGradesPage> {
                               : _porcentaje(weight),
                           const Color(0xFF7C3AED),
                         ),
-                        if (contribution != null)
-                          _chip(
-                            '${_espanol ? 'Aporte' : 'Contribution'} ${_numero(contribution)}',
-                            const Color(0xFF2563EB),
-                          ),
                       ],
                     ),
                   ],
@@ -1061,11 +1028,6 @@ class _SubjectGradesPageState extends State<SubjectGradesPage> {
                 _scenarioResult(
                   _espanol ? 'Promedio proyectado' : 'Projected average',
                   _numero(result.promedioParcial),
-                  oscuro,
-                ),
-                _scenarioResult(
-                  _espanol ? 'Aporte acumulado' : 'Accumulated contribution',
-                  _numero(result.aporteAcumulado),
                   oscuro,
                 ),
                 _scenarioResult(

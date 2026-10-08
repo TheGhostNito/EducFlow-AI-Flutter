@@ -12,6 +12,7 @@ Future<EvaluationDetailAction?> showEvaluationDetailSheet({
   required String subjectName,
   required String typeName,
   required bool spanish,
+  String? grade,
 }) {
   return showModalBottomSheet<EvaluationDetailAction>(
     context: context,
@@ -25,6 +26,7 @@ Future<EvaluationDetailAction?> showEvaluationDetailSheet({
         subjectName: subjectName,
         typeName: typeName,
         spanish: spanish,
+        grade: grade,
       );
     },
   );
@@ -36,14 +38,17 @@ class _EvaluationDetailSheet extends StatelessWidget {
     required this.subjectName,
     required this.typeName,
     required this.spanish,
+    this.grade,
   });
 
   final Evaluacion evaluation;
   final String subjectName;
   final String typeName;
   final bool spanish;
+  final String? grade;
 
   static const Color _evaluationColor = Color(0xFF8B5CF6);
+  static const Color _evaluatedColor = Color(0xFF059669);
 
   String _dateText() {
     final DateTime date = evaluation.fecha;
@@ -160,6 +165,30 @@ class _EvaluationDetailSheet extends StatelessWidget {
                           fontWeight: FontWeight.w800,
                         ),
                       ),
+                      if (grade != null) ...[
+                        const SizedBox(height: 8),
+                        Container(
+                          key: const ValueKey('evaluation-detail-graded'),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 9,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _evaluatedColor.withValues(
+                              alpha: dark ? 0.18 : 0.1,
+                            ),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            spanish ? 'Evaluada' : 'Graded',
+                            style: const TextStyle(
+                              color: _evaluatedColor,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -293,6 +322,16 @@ class _EvaluationDetailSheet extends StatelessWidget {
                         ? null
                         : _evaluationColor,
                   ),
+                  if (grade != null) ...[
+                    const SizedBox(height: 14),
+                    _infoRow(
+                      dark: dark,
+                      icon: Icons.grade_outlined,
+                      label: spanish ? 'Nota' : 'Grade',
+                      value: grade!,
+                      emphasized: true,
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -351,6 +390,7 @@ class _EvaluationDetailSheet extends StatelessWidget {
     required String label,
     required String value,
     Color? valueColor,
+    bool emphasized = false,
   }) {
     return Row(
       children: [
@@ -388,8 +428,8 @@ class _EvaluationDetailSheet extends StatelessWidget {
                       (dark
                           ? const Color(0xFFF8FAFC)
                           : const Color(0xFF1F2937)),
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w700,
+                  fontSize: emphasized ? 18 : 13.5,
+                  fontWeight: emphasized ? FontWeight.w900 : FontWeight.w700,
                 ),
               ),
             ],

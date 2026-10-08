@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../../models/asignatura.dart';
 import '../../../models/tarea.dart';
 import '../../../services/time_format_service.dart';
+import '../../../widgets/academic_schedule_picker.dart';
 
 class TaskEditResult {
   const TaskEditResult({
@@ -31,6 +32,7 @@ Future<TaskEditResult?> showTaskEditSheet({
   required bool spanish,
   Tarea? task,
   DateTime? initialDueDate,
+  String? initialSubjectId,
 }) {
   return showModalBottomSheet<TaskEditResult>(
     context: context,
@@ -44,6 +46,7 @@ Future<TaskEditResult?> showTaskEditSheet({
         spanish: spanish,
         task: task,
         initialDueDate: initialDueDate,
+        initialSubjectId: initialSubjectId,
       );
     },
   );
@@ -55,12 +58,14 @@ class _TaskEditSheet extends StatefulWidget {
     required this.spanish,
     this.task,
     this.initialDueDate,
+    this.initialSubjectId,
   });
 
   final List<Asignatura> subjects;
   final bool spanish;
   final Tarea? task;
   final DateTime? initialDueDate;
+  final String? initialSubjectId;
 
   @override
   State<_TaskEditSheet> createState() => _TaskEditSheetState();
@@ -83,10 +88,25 @@ class _TaskEditSheetState extends State<_TaskEditSheet> {
 
   DateTime? _dueDate;
   TimeOfDay? _dueTime;
+  bool _usingClassSchedule = false;
+  BloqueHorario? _selectedClassBlock;
 
   bool _showErrors = false;
 
   bool get _editing => widget.task != null;
+
+  Asignatura? get _selectedSubject {
+    final String? id = _subjectId;
+    if (id == null) return null;
+    for (final Asignatura subject in widget.subjects) {
+      if (subject.id == id) return subject;
+    }
+    return null;
+  }
+
+  List<BloqueHorario> get _availableClassBlocks {
+    return validAcademicBlocks(_selectedSubject);
+  }
 
   @override
   void initState() {
@@ -102,7 +122,7 @@ class _TaskEditSheetState extends State<_TaskEditSheet> {
 
     _priority = task?.prioridad ?? PrioridadTarea.media;
 
-    _subjectId = task?.asignaturaId;
+    _subjectId = task?.asignaturaId ?? widget.initialSubjectId;
 
     final DateTime? initialDate = task?.fechaEntrega ?? widget.initialDueDate;
 
@@ -334,7 +354,14 @@ class _TaskEditSheetState extends State<_TaskEditSheet> {
     }
 
     setState(() {
-      _subjectId = result == _generalSubject ? null : result;
+      final String? selectedSubjectId = result == _generalSubject
+          ? null
+          : result;
+      if (_subjectId != selectedSubjectId) {
+        _usingClassSchedule = false;
+        _selectedClassBlock = null;
+      }
+      _subjectId = selectedSubjectId;
     });
   }
 
@@ -347,6 +374,7 @@ class _TaskEditSheetState extends State<_TaskEditSheet> {
     required IconData icon,
   }) {
     return InkWell(
+      key: ValueKey('task-subject-$id'),
       borderRadius: BorderRadius.circular(15),
       onTap: () {
         HapticFeedback.selectionClick();
@@ -401,19 +429,55 @@ class _TaskEditSheetState extends State<_TaskEditSheet> {
   // FECHA
   // =========================================================
 
+  Future<void> _chooseClassBlock() async {
+    final Asignatura? subject = _selectedSubject;
+    final List<BloqueHorario> blocks = _availableClassBlocks;
+    if (subject == null || blocks.isEmpty) return;
+    HapticFeedback.selectionClick();
+    final BloqueHorario? selected = await showAcademicBlockPicker(
+      context: context,
+      subject: subject,
+      blocks: blocks,
+      selectedBlock: _selectedClassBlock,
+      spanish: widget.spanish,
+      accentColor: _primaryColor,
+      keyPrefix: 'task',
+    );
+    if (!mounted || selected == null) return;
+    final TimeOfDay? startTime = parseAcademicStoredTime(selected.horaInicio);
+    if (startTime == null) return;
+    setState(() {
+      _usingClassSchedule = true;
+      _selectedClassBlock = selected;
+      _dueDate = suggestAcademicDateForDay(
+        _dueDate ?? DateTime.now(),
+        selected.dia,
+        notBefore: DateTime.now(),
+      );
+      _dueTime = startTime;
+    });
+  }
+
   Future<void> _chooseDate() async {
     HapticFeedback.selectionClick();
 
-    final DateTime now = DateTime.now();
+    final DateTime now = academicDateOnly(DateTime.now());
+    final BloqueHorario? restrictedBlock = _usingClassSchedule
+        ? _selectedClassBlock
+        : null;
 
     final DateTime? result = await showDatePicker(
       context: context,
       initialDate: _dueDate ?? now,
-      firstDate: DateTime(now.year - 1),
+      firstDate: restrictedBlock == null ? DateTime(now.year - 1) : now,
       lastDate: DateTime(now.year + 10),
       helpText: widget.spanish ? 'Fecha de entrega' : 'Due date',
       cancelText: widget.spanish ? 'Cancelar' : 'Cancel',
       confirmText: widget.spanish ? 'Aceptar' : 'OK',
+      selectableDayPredicate: restrictedBlock == null
+          ? null
+          : (date) =>
+                academicDateIsSelectable(date, restrictedBlock, notBefore: now),
     );
 
     if (!mounted || result == null) {
@@ -431,6 +495,8 @@ class _TaskEditSheetState extends State<_TaskEditSheet> {
     setState(() {
       _dueDate = null;
       _dueTime = null;
+      _usingClassSchedule = false;
+      _selectedClassBlock = null;
     });
   }
 
@@ -658,6 +724,7 @@ class _TaskEditSheetState extends State<_TaskEditSheet> {
               const SizedBox(height: 14),
 
               _buildSelectorField(
+                fieldKey: const ValueKey('task-subject-field'),
                 dark: dark,
                 label: widget.spanish ? 'Asignatura' : 'Subject',
                 value: _subjectName(),
@@ -720,7 +787,42 @@ class _TaskEditSheetState extends State<_TaskEditSheet> {
 
               const SizedBox(height: 20),
 
+              Text(
+                widget.spanish ? 'Fecha y hora' : 'Date and time',
+                style: TextStyle(
+                  color: dark
+                      ? const Color(0xFFC4CAD4)
+                      : const Color(0xFF4B5563),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+
+              const SizedBox(height: 9),
+
+              AcademicScheduleModePanel(
+                keyPrefix: 'task',
+                spanish: widget.spanish,
+                accentColor: _primaryColor,
+                subject: _selectedSubject,
+                blocks: _availableClassBlocks,
+                usingSchedule: _usingClassSchedule,
+                selectedBlock: _selectedClassBlock,
+                onManualSelected: () {
+                  HapticFeedback.selectionClick();
+                  setState(() {
+                    _usingClassSchedule = false;
+                    _selectedClassBlock = null;
+                  });
+                },
+                onScheduleSelected: _chooseClassBlock,
+                onChangeBlock: _chooseClassBlock,
+              ),
+
+              const SizedBox(height: 14),
+
               _buildSelectorField(
+                fieldKey: const ValueKey('task-date-field'),
                 dark: dark,
                 label: widget.spanish ? 'Fecha de entrega' : 'Due date',
                 value: _dueDate == null
@@ -734,6 +836,7 @@ class _TaskEditSheetState extends State<_TaskEditSheet> {
               const SizedBox(height: 14),
 
               _buildSelectorField(
+                fieldKey: const ValueKey('task-time-field'),
                 dark: dark,
                 label: widget.spanish ? 'Hora límite' : 'Due time',
                 value: _dueDate == null
@@ -845,6 +948,7 @@ class _TaskEditSheetState extends State<_TaskEditSheet> {
   }
 
   Widget _buildSelectorField({
+    Key? fieldKey,
     required bool dark,
     required String label,
     required String value,
@@ -854,6 +958,7 @@ class _TaskEditSheetState extends State<_TaskEditSheet> {
     bool enabled = true,
   }) {
     return InkWell(
+      key: fieldKey,
       onTap: enabled ? onTap : null,
       borderRadius: BorderRadius.circular(14),
       child: Container(

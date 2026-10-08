@@ -738,6 +738,10 @@ class _DashboardPageState extends State<DashboardPage>
     await _cargarContenido(forzar: true, silencioso: true);
   }
 
+  void _abrirEvaluaciones() {
+    MainNavigation.goTo(context, SeccionPrincipal.evaluaciones);
+  }
+
   Future<void> _abrirTareaEspecifica(Tarea tarea) async {
     await Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => TasksPage(initialTaskId: tarea.id)),
@@ -863,6 +867,7 @@ class _DashboardPageState extends State<DashboardPage>
               progress: _progresoHeader,
               title: _espanol ? 'Inicio' : 'Home',
               trailing: _buildCompactProfileButton(oscuro),
+              opaqueBackground: true,
             ),
           ),
 
@@ -1125,6 +1130,10 @@ class _DashboardPageState extends State<DashboardPage>
               _abrirNotas();
               break;
 
+            case _ProfileAction.evaluaciones:
+              _abrirEvaluaciones();
+              break;
+
             case _ProfileAction.tareas:
               _abrirTareas();
               break;
@@ -1156,6 +1165,13 @@ class _DashboardPageState extends State<DashboardPage>
               action: _ProfileAction.notas,
               icon: Icons.analytics_outlined,
               label: _espanol ? 'Notas' : 'Grades',
+              oscuro: oscuro,
+            ),
+
+            _profileMenuItem(
+              action: _ProfileAction.evaluaciones,
+              icon: Icons.school_outlined,
+              label: _espanol ? 'Evaluaciones' : 'Assessments',
               oscuro: oscuro,
             ),
 
@@ -1264,6 +1280,10 @@ class _DashboardPageState extends State<DashboardPage>
               _abrirNotas();
               break;
 
+            case _ProfileAction.evaluaciones:
+              _abrirEvaluaciones();
+              break;
+
             case _ProfileAction.tareas:
               _abrirTareas();
               break;
@@ -1297,6 +1317,13 @@ class _DashboardPageState extends State<DashboardPage>
               action: _ProfileAction.notas,
               icon: Icons.analytics_outlined,
               label: _espanol ? 'Notas' : 'Grades',
+              oscuro: oscuro,
+            ),
+
+            _profileMenuItem(
+              action: _ProfileAction.evaluaciones,
+              icon: Icons.school_outlined,
+              label: _espanol ? 'Evaluaciones' : 'Assessments',
               oscuro: oscuro,
             ),
 
@@ -2899,4 +2926,12 @@ class _DashboardPageState extends State<DashboardPage>
 // ACCIONES MENÚ PERFIL
 // ===========================================================
 
-enum _ProfileAction { perfil, asignaturas, notas, tareas, ajustes, logout }
+enum _ProfileAction {
+  perfil,
+  asignaturas,
+  notas,
+  evaluaciones,
+  tareas,
+  ajustes,
+  logout,
+}
