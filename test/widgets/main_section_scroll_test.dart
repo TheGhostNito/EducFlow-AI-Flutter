@@ -3,12 +3,21 @@ import 'package:eduflow_ai/widgets/main_section_scroll.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ionicons/ionicons.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/firebase_auth_test_host.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  setUpAll(FirebaseAuthTestHost().initialize);
+  setUpAll(() async {
+    await FirebaseAuthTestHost().initialize();
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    await Supabase.initialize(
+      url: 'https://ubjmdfwkjgblnjgmufpc.supabase.co',
+      publishableKey: 'sb_publishable_DmUj02VfZSkZOzoR11oq5A_TumX6rfA',
+    );
+  });
 
   Future<ScrollController> showPage(
     WidgetTester tester, {

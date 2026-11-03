@@ -1,27 +1,36 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:ionicons/ionicons.dart';
 
 import '../../models/ai_conversation.dart';
 import '../../services/ai_chat_history_service.dart';
+import '../../services/supabase_ai_chat_history_repository.dart';
 import '../../services/time_format_service.dart';
 import '../../services/translation_service.dart';
 import '../../widgets/app_pressable.dart';
 import '../../widgets/app_status_snackbar.dart';
 
 class AiChatHistoryPage extends StatefulWidget {
-  const AiChatHistoryPage({super.key, this.currentConversationId});
+  const AiChatHistoryPage({
+    super.key,
+    this.currentConversationId,
+    this.historyService,
+  });
 
   final String? currentConversationId;
+  final AiChatHistoryRepository? historyService;
 
   @override
   State<AiChatHistoryPage> createState() => _AiChatHistoryPageState();
 }
 
-class _AiChatHistoryPageState extends State<AiChatHistoryPage> {
+class _AiChatHistoryPageState extends State<AiChatHistoryPage>
+    with WidgetsBindingObserver {
   static const Color _primaryColor = Color(0xFF5B5FEF);
 
-  final AiChatHistoryService _historyService = AiChatHistoryService.instance;
+  late final AiChatHistoryRepository _historyService;
 
   final TranslationService _translationService = TranslationService.instance;
 
@@ -30,6 +39,8 @@ class _AiChatHistoryPageState extends State<AiChatHistoryPage> {
   List<AiConversation> _conversations = [];
 
   bool _loading = true;
+  bool _loadError = false;
+  bool _refreshing = false;
 
   bool get _spanish => _translationService.isSpanish;
 
@@ -37,9 +48,13 @@ class _AiChatHistoryPageState extends State<AiChatHistoryPage> {
   void initState() {
     super.initState();
 
+    _historyService =
+        widget.historyService ?? SupabaseAiChatHistoryRepository.instance;
+
     _translationService.addListener(_refresh);
 
     _timeFormatService.addListener(_refresh);
+    WidgetsBinding.instance.addObserver(this);
 
     _load();
   }
@@ -49,6 +64,7 @@ class _AiChatHistoryPageState extends State<AiChatHistoryPage> {
     _translationService.removeListener(_refresh);
 
     _timeFormatService.removeListener(_refresh);
+    WidgetsBinding.instance.removeObserver(this);
 
     super.dispose();
   }
@@ -59,10 +75,23 @@ class _AiChatHistoryPageState extends State<AiChatHistoryPage> {
     }
   }
 
-  Future<void> _load() async {
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed &&
+        !_loading &&
+        ModalRoute.of(context)?.isCurrent == true) {
+      unawaited(_load(silent: true));
+    }
+  }
+
+  Future<void> _load({bool silent = false}) async {
+    if (_refreshing) return;
+    _refreshing = true;
+    if (!silent && mounted) setState(() => _loading = true);
     try {
       final List<AiConversation> conversations = await _historyService
-          .getConversations();
+          .getConversations()
+          .timeout(const Duration(seconds: 10));
 
       if (!mounted) {
         return;
@@ -70,12 +99,14 @@ class _AiChatHistoryPageState extends State<AiChatHistoryPage> {
 
       setState(() {
         _conversations = conversations;
+        _loadError = false;
       });
     } catch (_) {
       if (!mounted) {
         return;
       }
-
+      if (silent) return;
+      setState(() => _loadError = true);
       showAppStatusSnackBar(
         context,
         message: _spanish
@@ -84,7 +115,8 @@ class _AiChatHistoryPageState extends State<AiChatHistoryPage> {
         type: AppStatusType.error,
       );
     } finally {
-      if (mounted) {
+      _refreshing = false;
+      if (mounted && !silent) {
         setState(() {
           _loading = false;
         });
@@ -212,6 +244,18 @@ class _AiChatHistoryPageState extends State<AiChatHistoryPage> {
                       child: CircularProgressIndicator(
                         color: _primaryColor,
                         strokeWidth: 3,
+                      ),
+                    )
+                  : _loadError
+                  ? Center(
+                      child: TextButton(
+                        key: const ValueKey('retry-ai-history-list'),
+                        onPressed: _load,
+                        child: Text(
+                          _spanish
+                              ? 'No pude cargar el historial. Reintentar'
+                              : 'Could not load history. Retry',
+                        ),
                       ),
                     )
                   : _conversations.isEmpty

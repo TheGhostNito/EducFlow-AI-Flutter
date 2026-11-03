@@ -10,12 +10,20 @@ import 'package:eduflow_ai/services/perfil_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/firebase_auth_test_host.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  setUpAll(FirebaseAuthTestHost().initialize);
+  setUpAll(() async {
+    await FirebaseAuthTestHost().initialize();
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    await Supabase.initialize(
+      url: 'https://ubjmdfwkjgblnjgmufpc.supabase.co',
+      publishableKey: 'sb_publishable_DmUj02VfZSkZOzoR11oq5A_TumX6rfA',
+    );
+  });
 
   setUp(() {
     SharedPreferences.setMockInitialValues({});

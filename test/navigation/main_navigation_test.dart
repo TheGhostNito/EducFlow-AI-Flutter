@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ionicons/ionicons.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/firebase_auth_test_host.dart';
 
@@ -85,7 +87,14 @@ class _Secondary extends StatelessWidget {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  setUpAll(FirebaseAuthTestHost().initialize);
+  setUpAll(() async {
+    await FirebaseAuthTestHost().initialize();
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    await Supabase.initialize(
+      url: 'https://ubjmdfwkjgblnjgmufpc.supabase.co',
+      publishableKey: 'sb_publishable_DmUj02VfZSkZOzoR11oq5A_TumX6rfA',
+    );
+  });
   final payloads = NotificationService.instance.notificationPayload;
   setUp(() => payloads.value = null);
   tearDown(() => payloads.value = null);
@@ -247,7 +256,7 @@ void main() {
     expect(payloads.value, isNull);
   });
 
-  testWidgets('una evaluación específica llega al Calendario por ID', (
+  testWidgets('una evaluación específica llega a Evaluaciones por ID', (
     tester,
   ) async {
     await mostrar(
@@ -271,7 +280,7 @@ void main() {
 
     await tester.tap(find.text('Abrir evaluación'));
     await tester.pump();
-    expect(find.text('seccion:calendario'), findsOneWidget);
+    expect(find.text('seccion:evaluaciones'), findsOneWidget);
     expect(find.text('evaluation:evaluation-42'), findsOneWidget);
   });
 

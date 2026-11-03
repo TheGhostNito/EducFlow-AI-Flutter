@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/firebase_auth_test_host.dart';
 
@@ -26,6 +27,11 @@ void main() {
     SharedPreferences.setMockInitialValues({
       'educflow-user-$uid-beta-0.1-welcome-seen': true,
     });
+
+    await Supabase.initialize(
+      url: 'https://ubjmdfwkjgblnjgmufpc.supabase.co',
+      publishableKey: 'sb_publishable_DmUj02VfZSkZOzoR11oq5A_TumX6rfA',
+    );
 
     // Ahem (fuente por defecto de flutter_test) no reproduce las medidas del
     // texto de la aplicación. Usamos las fuentes que incluye el mismo SDK.
