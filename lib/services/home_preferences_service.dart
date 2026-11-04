@@ -1,6 +1,8 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart'
+    show Supabase, SupabaseClient;
 
 @immutable
 class HomePreferences {
@@ -31,6 +33,39 @@ class HomePreferences {
     studyRemindersVisible: true,
     smartSummaryVisible: true,
   );
+
+  factory HomePreferences.fromDatabase(Map<String, dynamic> values) {
+    bool read(String key, bool fallback) =>
+        values[key] is bool ? values[key] as bool : fallback;
+    return HomePreferences(
+      summaryVisible: read('resumenAcademico', defaults.summaryVisible),
+      todayClassesVisible: read('clasesHoy', defaults.todayClassesVisible),
+      subjectsVisible: read('misAsignaturas', defaults.subjectsVisible),
+      nextTaskVisible: read('proximaTarea', defaults.nextTaskVisible),
+      nextEvaluationVisible: read(
+        'proximaEvaluacion',
+        defaults.nextEvaluationVisible,
+      ),
+      studyRemindersVisible: read(
+        'recordatoriosEstudio',
+        defaults.studyRemindersVisible,
+      ),
+      smartSummaryVisible: read(
+        'resumenInteligente',
+        defaults.smartSummaryVisible,
+      ),
+    );
+  }
+
+  Map<String, dynamic> toDatabase() => {
+    'resumenAcademico': summaryVisible,
+    'clasesHoy': todayClassesVisible,
+    'misAsignaturas': subjectsVisible,
+    'proximaTarea': nextTaskVisible,
+    'proximaEvaluacion': nextEvaluationVisible,
+    'recordatoriosEstudio': studyRemindersVisible,
+    'resumenInteligente': smartSummaryVisible,
+  };
 
   HomePreferences copyWith({
     bool? summaryVisible,
@@ -78,12 +113,65 @@ class HomePreferences {
   );
 }
 
+abstract interface class HomePreferencesDataSource {
+  Future<Map<String, dynamic>?> get(String uid);
+  Future<void> insertIfMissing(String uid);
+  Future<void> save(String uid, Map<String, dynamic> values);
+}
+
+class SupabaseHomePreferencesDataSource implements HomePreferencesDataSource {
+  SupabaseHomePreferencesDataSource(this._client);
+
+  final SupabaseClient _client;
+
+  @override
+  Future<Map<String, dynamic>?> get(String uid) async {
+    final row = await _client
+        .from('preferencias_usuario')
+        .select('configuracion_inicio')
+        .eq('usuario_uid', uid)
+        .maybeSingle();
+    return row?['configuracion_inicio'] is Map
+        ? Map<String, dynamic>.from(row!['configuracion_inicio'] as Map)
+        : null;
+  }
+
+  @override
+  Future<void> insertIfMissing(String uid) async {
+    await _client
+        .from('preferencias_usuario')
+        .upsert(
+          {'usuario_uid': uid},
+          onConflict: 'usuario_uid',
+          ignoreDuplicates: true,
+        );
+  }
+
+  @override
+  Future<void> save(String uid, Map<String, dynamic> values) async {
+    await _client
+        .from('preferencias_usuario')
+        .update({'configuracion_inicio': values})
+        .eq('usuario_uid', uid);
+  }
+}
+
 class HomePreferencesService extends ChangeNotifier {
   HomePreferencesService._();
 
   static final HomePreferencesService instance = HomePreferencesService._();
 
   final Map<String, HomePreferences> _memoryCache = {};
+  HomePreferencesDataSource? _dataSourceOverride;
+
+  HomePreferencesDataSource get _dataSource =>
+      _dataSourceOverride ??
+      SupabaseHomePreferencesDataSource(Supabase.instance.client);
+
+  @visibleForTesting
+  void useDataSourceForTesting(HomePreferencesDataSource? dataSource) {
+    _dataSourceOverride = dataSource;
+  }
 
   String? get currentUid => FirebaseAuth.instance.currentUser?.uid;
 
@@ -105,10 +193,27 @@ class HomePreferencesService extends ChangeNotifier {
     String uid, {
     bool forceRefresh = false,
   }) async {
+    if (currentUid != uid) {
+      throw StateError('La configuración de Inicio no pertenece a la sesión.');
+    }
     final HomePreferences? cached = _memoryCache[uid];
     if (!forceRefresh && cached != null) {
       _setCurrent(cached, notify: false);
       return cached;
+    }
+
+    try {
+      final remote = await _dataSource.get(uid);
+      if (currentUid != uid) throw StateError('La sesión cambió.');
+      if (remote != null) {
+        final preferences = HomePreferences.fromDatabase(remote);
+        _memoryCache[uid] = preferences;
+        _setCurrent(preferences, notify: false);
+        return preferences;
+      }
+    } catch (_) {
+      if (currentUid != uid) throw StateError('La sesión cambió.');
+      // La caché local solo se usa cuando SQL no puede responder.
     }
 
     final SharedPreferences local = await SharedPreferences.getInstance();
@@ -149,6 +254,13 @@ class HomePreferencesService extends ChangeNotifier {
   }
 
   Future<void> saveForUser(String uid, HomePreferences preferences) async {
+    if (currentUid != uid) throw StateError('La sesión cambió.');
+    await _dataSource.insertIfMissing(uid);
+    if (currentUid != uid) throw StateError('La sesión cambió.');
+    final remote = await _dataSource.get(uid);
+    if (currentUid != uid) throw StateError('La sesión cambió.');
+    await _dataSource.save(uid, {...?remote, ...preferences.toDatabase()});
+    if (currentUid != uid) throw StateError('La sesión cambió.');
     final SharedPreferences local = await SharedPreferences.getInstance();
     await Future.wait([
       local.setBool(_key(uid, 'summary-visible'), preferences.summaryVisible),
@@ -240,7 +352,6 @@ class HomePreferencesService extends ChangeNotifier {
     if (notify && changed) notifyListeners();
   }
 
-  @visibleForTesting
   void clearMemoryCache() {
     _memoryCache.clear();
     _current = HomePreferences.defaults;

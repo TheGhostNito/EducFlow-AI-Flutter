@@ -1,7 +1,7 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show Supabase;
 
 enum BetaNoticeKind { welcome, ai }
 
@@ -40,25 +40,34 @@ abstract interface class BetaNoticeCoordinator {
 class BetaNoticeService implements BetaNoticeCoordinator {
   factory BetaNoticeService._() {
     final auth = FirebaseAuth.instance;
-    final firestore = FirebaseFirestore.instance;
+    final supabase = Supabase.instance.client;
     return BetaNoticeService._internal(
       currentUid: () => auth.currentUser?.uid,
       loadLocalPreferences: SharedPreferences.getInstance,
       loadRemoteNotices: (uid) async {
-        final snapshot = await firestore.collection('usuarios').doc(uid).get();
-        final rawNotices = snapshot.data()?['avisosBeta'];
-        return rawNotices is Map ? Map<String, dynamic>.from(rawNotices) : null;
+        final rows = await supabase
+            .from('avisos_beta')
+            .select('clave,visto')
+            .eq('usuario_uid', uid);
+        return {for (final row in rows) row['clave'] as String: row['visto']};
       },
       markRemoteSeen: (uid, kind) async {
-        final ref = firestore.collection('usuarios').doc(uid);
-        final remoteKey = _remoteKey(kind);
-        try {
-          await ref.update({'avisosBeta.$remoteKey': true});
-        } catch (_) {
-          await ref.set({
-            'avisosBeta': {remoteKey: true},
-          }, SetOptions(merge: true));
-        }
+        final key = _remoteKey(kind);
+        await supabase
+            .from('avisos_beta')
+            .upsert(
+              {'usuario_uid': uid, 'clave': key},
+              onConflict: 'usuario_uid,clave',
+              ignoreDuplicates: true,
+            );
+        await supabase
+            .from('avisos_beta')
+            .update({
+              'visto': true,
+              'fecha_actualizacion': DateTime.now().toUtc().toIso8601String(),
+            })
+            .eq('usuario_uid', uid)
+            .eq('clave', key);
       },
     );
   }
@@ -144,7 +153,14 @@ class BetaNoticeService implements BetaNoticeCoordinator {
       if (currentUid() != uid || !_owns(reservation)) return null;
 
       final localKey = _localKey(uid, kind);
-      if (local.getBool(localKey) == true) return null;
+      if (local.getBool(localKey) == true) {
+        try {
+          await markRemoteSeen(uid, kind);
+        } catch (_) {
+          // La marca local se volverá a conciliar al recuperar conexión.
+        }
+        return null;
+      }
 
       try {
         final notices = await loadRemoteNotices(uid);

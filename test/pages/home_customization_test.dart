@@ -12,6 +12,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   const String uid = 'home-customization-test';
   final HomePreferencesService service = HomePreferencesService.instance;
+  late _FakeHomePreferencesDataSource dataSource;
 
   setUpAll(() async {
     await FirebaseAuthTestHost().initialize(initialUid: uid);
@@ -19,6 +20,8 @@ void main() {
 
   setUp(() {
     SharedPreferences.setMockInitialValues({});
+    dataSource = _FakeHomePreferencesDataSource();
+    service.useDataSourceForTesting(dataSource);
     service.clearMemoryCache();
   });
 
@@ -87,7 +90,7 @@ void main() {
     expect(find.text('clases-inicio'), findsOneWidget);
   });
 
-  test('las preferencias se mantienen en almacenamiento local', () async {
+  test('las preferencias se recuperan desde SQL en otra sesión', () async {
     const HomePreferences saved = HomePreferences(
       summaryVisible: false,
       todayClassesVisible: true,
@@ -99,6 +102,7 @@ void main() {
     );
     await service.saveForUser(uid, saved);
     service.clearMemoryCache();
+    SharedPreferences.setMockInitialValues({});
 
     final HomePreferences loaded = await service.loadForUser(uid);
     expect(loaded, saved);
@@ -291,4 +295,22 @@ void main() {
       isFalse,
     );
   });
+}
+
+class _FakeHomePreferencesDataSource implements HomePreferencesDataSource {
+  final Map<String, Map<String, dynamic>> rows = {};
+
+  @override
+  Future<Map<String, dynamic>?> get(String uid) async =>
+      rows[uid] == null ? null : Map<String, dynamic>.from(rows[uid]!);
+
+  @override
+  Future<void> insertIfMissing(String uid) async {
+    rows.putIfAbsent(uid, () => HomePreferences.defaults.toDatabase());
+  }
+
+  @override
+  Future<void> save(String uid, Map<String, dynamic> values) async {
+    rows[uid] = Map<String, dynamic>.from(values);
+  }
 }

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:eduflow_ai/pages/dashboard/dashboard_page.dart';
 import 'package:eduflow_ai/services/translation_service.dart';
 import 'package:eduflow_ai/services/perfil_service.dart';
+import 'package:eduflow_ai/services/user_preferences_service.dart';
 import 'package:eduflow_ai/widgets/app_scroll_header.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -27,10 +28,12 @@ void main() {
     SharedPreferences.setMockInitialValues({
       'educflow-user-$uid-beta-0.1-welcome-seen': true,
     });
-
     await Supabase.initialize(
       url: 'https://ubjmdfwkjgblnjgmufpc.supabase.co',
       publishableKey: 'sb_publishable_DmUj02VfZSkZOzoR11oq5A_TumX6rfA',
+    );
+    UserPreferencesService.instance.useDataSourceForTesting(
+      _MenuPreferencesDataSource(uid),
     );
 
     // Ahem (fuente por defecto de flutter_test) no reproduce las medidas del
@@ -162,11 +165,19 @@ void main() {
                   ? [
                       'Perfil',
                       'Asignaturas',
+                      'Evaluaciones',
                       'Tareas',
                       'Ajustes',
                       'Cerrar sesión',
                     ]
-                  : ['Profile', 'Subjects', 'Tasks', 'Settings', 'Sign out'];
+                  : [
+                      'Profile',
+                      'Subjects',
+                      'Assessments',
+                      'Tasks',
+                      'Settings',
+                      'Sign out',
+                    ];
               for (final label in labels) {
                 final text = find.text(label);
                 expect(text, findsOneWidget);
@@ -185,6 +196,29 @@ void main() {
         );
       }
     }
+  }
+}
+
+class _MenuPreferencesDataSource implements UserPreferencesDataSource {
+  _MenuPreferencesDataSource(this.uid);
+  final String uid;
+  final Map<String, dynamic> row = {
+    'tema': 'light',
+    'idioma': 'es',
+    'formato_hora': 'system',
+  };
+
+  @override
+  Future<Map<String, dynamic>?> get(String requestedUid) async =>
+      requestedUid == uid ? Map<String, dynamic>.from(row) : null;
+
+  @override
+  Future<void> insertIfMissing(Map<String, dynamic> values) async {}
+
+  @override
+  Future<void> update(String requestedUid, Map<String, dynamic> values) async {
+    if (requestedUid != uid) throw StateError('UID de prueba inesperado');
+    row.addAll(values);
   }
 }
 

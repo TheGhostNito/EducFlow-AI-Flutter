@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../services/session_preparation_service.dart';
+import '../../services/home_preferences_service.dart';
 import '../../services/theme_service.dart';
 import '../../services/time_format_service.dart';
 import '../../services/translation_service.dart';
@@ -84,6 +85,7 @@ class SessionController extends ChangeNotifier {
     signOutAction: FirebaseAuth.instance.signOut,
     afterSignOut: () async {
       UserPreferencesService.instance.clearMemoryCache();
+      HomePreferencesService.instance.clearMemoryCache();
       ThemeService.instance.resetForSignedOutUser();
       TranslationService.instance.resetForSignedOutUser();
       await TimeFormatService.instance.resetForSignedOutUser();

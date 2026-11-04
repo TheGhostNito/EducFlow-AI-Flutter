@@ -18,7 +18,7 @@ class NotificacionApp {
     this.ocultada = false,
   });
 
-  /// ID estable que luego usaremos para guardar leído/oculto en Firestore.
+  /// ID estable para guardar leído/oculto en Supabase.
   final String id;
 
   final TipoNotificacionApp tipo;
@@ -43,7 +43,7 @@ class NotificacionApp {
   final int? bloqueIndex;
 
   /// Estos dos estados se completarán en el siguiente paso
-  /// desde Firestore, por usuario.
+  /// desde Supabase, por usuario.
   final bool leida;
   final bool ocultada;
 

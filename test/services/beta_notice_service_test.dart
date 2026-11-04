@@ -11,6 +11,24 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
+  test('una marca local pendiente se concilia con SQL al reconectar', () async {
+    final local = await SharedPreferences.getInstance();
+    await local.setBool('educflow-user-a-beta-0.1-welcome-seen', true);
+    var remoteMarks = 0;
+    final service = BetaNoticeService.forTesting(
+      currentUid: () => 'a',
+      markRemoteSeen: (_, _) async {
+        remoteMarks++;
+      },
+    );
+
+    expect(
+      await service.reserveIfShouldShow('a', BetaNoticeKind.welcome),
+      isNull,
+    );
+    expect(remoteMarks, 1);
+  });
+
   test(
     'una excepción al adquirir libera la reserva y permite reintentar',
     () async {
