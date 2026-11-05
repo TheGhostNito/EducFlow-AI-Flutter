@@ -262,6 +262,7 @@ class _GradesPageState extends State<GradesPage> {
               progress: _progresoHeader,
               title: _espanol ? 'Notas' : 'Grades',
               leading: _backButton(oscuro, compact: true),
+              opaqueBackground: true,
               trailing: IconButton(
                 tooltip: _espanol ? 'Configurar escala' : 'Configure scale',
                 onPressed: _datosNotas == null ? null : _editarConfiguracion,

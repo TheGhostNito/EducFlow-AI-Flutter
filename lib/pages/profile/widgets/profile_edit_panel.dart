@@ -4,6 +4,7 @@ import 'package:ionicons/ionicons.dart';
 
 import '../../../models/perfil_usuario.dart';
 import '../../../widgets/app_pressable.dart';
+import '../../../widgets/form_sticky_action_bar.dart';
 import 'profile_education_level_sheet.dart';
 import 'profile_option_sheet.dart';
 
@@ -50,7 +51,7 @@ class ProfileEditPanel extends StatefulWidget {
     required this.initialEducationLevel,
     required this.spanish,
     required this.saving,
-    required this.onCancel,
+    required this.submitController,
     required this.onSave,
   });
 
@@ -62,8 +63,7 @@ class ProfileEditPanel extends StatefulWidget {
 
   final bool spanish;
   final bool saving;
-
-  final VoidCallback onCancel;
+  final FormSubmitController submitController;
 
   final Future<void> Function(ProfileEditData data) onSave;
 
@@ -98,6 +98,8 @@ class _ProfileEditPanelState extends State<ProfileEditPanel> {
 
   bool _mostrarErrores = false;
 
+  late final Future<void> Function() _submitCallback;
+
   bool get _esEscolar =>
       _nivel == NivelEducativoPerfil.basica ||
       _nivel == NivelEducativoPerfil.media;
@@ -113,6 +115,9 @@ class _ProfileEditPanelState extends State<ProfileEditPanel> {
   @override
   void initState() {
     super.initState();
+
+    _submitCallback = _guardar;
+    widget.submitController.attach(_submitCallback);
 
     _nivel = widget.initialEducationLevel != NivelEducativoPerfil.vacio
         ? widget.initialEducationLevel
@@ -148,7 +153,18 @@ class _ProfileEditPanelState extends State<ProfileEditPanel> {
   }
 
   @override
+  void didUpdateWidget(covariant ProfileEditPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.submitController != widget.submitController) {
+      oldWidget.submitController.detach(_submitCallback);
+      widget.submitController.attach(_submitCallback);
+    }
+  }
+
+  @override
   void dispose() {
+    widget.submitController.detach(_submitCallback);
     _nombreController.dispose();
     _establecimientoController.dispose();
     _tipoEstablecimientoController.dispose();
@@ -639,10 +655,6 @@ class _ProfileEditPanelState extends State<ProfileEditPanel> {
               height: 1.4,
             ),
           ),
-
-          const SizedBox(height: 20),
-
-          _buildActions(oscuro),
         ],
       ),
     );
@@ -696,32 +708,6 @@ class _ProfileEditPanelState extends State<ProfileEditPanel> {
                 ),
               ),
             ],
-          ),
-        ),
-
-        const SizedBox(width: 12),
-
-        AppPressable(
-          scale: 0.88,
-          child: IconButton(
-            onPressed: widget.saving ? null : widget.onCancel,
-            tooltip: '',
-            style: IconButton.styleFrom(
-              backgroundColor: oscuro
-                  ? const Color(0xFF202631)
-                  : const Color(0xFFF7F8FA),
-              foregroundColor: oscuro
-                  ? const Color(0xFFCBD1DB)
-                  : const Color(0xFF6B7280),
-              side: BorderSide(
-                color: oscuro
-                    ? const Color(0xFF343C48)
-                    : const Color(0xFFE2E6ED),
-              ),
-              minimumSize: const Size(42, 42),
-              maximumSize: const Size(42, 42),
-            ),
-            icon: const Icon(Icons.close_rounded, size: 20),
           ),
         ),
       ],
@@ -1218,77 +1204,6 @@ class _ProfileEditPanelState extends State<ProfileEditPanel> {
           fontWeight: FontWeight.w700,
         ),
       ),
-    );
-  }
-
-  Widget _buildActions(bool oscuro) {
-    return Row(
-      children: [
-        Expanded(
-          child: SizedBox(
-            height: 48,
-            child: OutlinedButton(
-              onPressed: widget.saving ? null : widget.onCancel,
-              style: OutlinedButton.styleFrom(
-                foregroundColor: oscuro
-                    ? const Color(0xFFE5E9F0)
-                    : const Color(0xFF4B5563),
-                side: BorderSide(
-                  color: oscuro
-                      ? const Color(0xFF343C48)
-                      : const Color(0xFFDFE3EA),
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(13),
-                ),
-              ),
-              child: Text(
-                widget.spanish ? 'Cancelar' : 'Cancel',
-                style: const TextStyle(fontWeight: FontWeight.w700),
-              ),
-            ),
-          ),
-        ),
-
-        const SizedBox(width: 10),
-
-        Expanded(
-          child: SizedBox(
-            height: 48,
-            child: ElevatedButton(
-              onPressed: widget.saving ? null : _guardar,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _primaryColor,
-                foregroundColor: Colors.white,
-                disabledBackgroundColor: _primaryColor.withValues(alpha: 0.55),
-                disabledForegroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(13),
-                ),
-              ),
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 180),
-                child: widget.saving
-                    ? const SizedBox(
-                        key: ValueKey('saving'),
-                        width: 21,
-                        height: 21,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.4,
-                          color: Colors.white,
-                        ),
-                      )
-                    : Text(
-                        widget.spanish ? 'Guardar cambios' : 'Save changes',
-                        key: const ValueKey('save'),
-                        style: const TextStyle(fontWeight: FontWeight.w700),
-                      ),
-              ),
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

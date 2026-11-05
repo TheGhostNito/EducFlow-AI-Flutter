@@ -67,9 +67,8 @@ class TareasSqlCodec {
   String? normalizarHora(Object? valor) {
     final texto = valor?.toString().trim() ?? '';
     if (texto.isEmpty) return null;
-    final coincidencia = RegExp(
-      r'^(\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?$',
-    ).firstMatch(texto);
+    final coincidencia = RegExp(r'^(\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?$')
+        .firstMatch(texto);
     if (coincidencia == null) {
       throw FormatException('Hora SQL no válida: $texto');
     }
@@ -88,9 +87,7 @@ class TareasSqlCodec {
     }
     final texto = valor.toString().trim();
     if (texto.isEmpty) return null;
-    final coincidencia = RegExp(r'^(\d{4})-(\d{2})-(\d{2})$').firstMatch(
-      texto,
-    );
+    final coincidencia = RegExp(r'^(\d{4})-(\d{2})-(\d{2})$').firstMatch(texto);
     if (coincidencia == null) {
       throw FormatException('Fecha SQL no válida: $texto');
     }
@@ -173,10 +170,7 @@ class SupabaseTareasDataSource implements TareasDataSource {
   Future<Tarea> crear(String uid, Tarea tarea) async {
     final resultado = await _supabase.rpc<dynamic>(
       'guardar_tarea',
-      params: {
-        'p_operacion': 'crear',
-        'p_tarea': codec.payload(tarea),
-      },
+      params: {'p_operacion': 'crear', 'p_tarea': codec.payload(tarea)},
     );
     return codec.desdeFila(Map<String, dynamic>.from(resultado as Map));
   }
@@ -185,20 +179,14 @@ class SupabaseTareasDataSource implements TareasDataSource {
   Future<Tarea> actualizar(String uid, Tarea tarea) async {
     final resultado = await _supabase.rpc<dynamic>(
       'guardar_tarea',
-      params: {
-        'p_operacion': 'actualizar',
-        'p_tarea': codec.payload(tarea),
-      },
+      params: {'p_operacion': 'actualizar', 'p_tarea': codec.payload(tarea)},
     );
     return codec.desdeFila(Map<String, dynamic>.from(resultado as Map));
   }
 
   @override
   Future<void> eliminar(String uid, String id) {
-    return _supabase.rpc<void>(
-      'eliminar_tarea',
-      params: {'p_tarea_id': id},
-    );
+    return _supabase.rpc<void>('eliminar_tarea', params: {'p_tarea_id': id});
   }
 
   @override
@@ -260,9 +248,8 @@ class TareasService {
   final FirebaseAuth? _auth;
   final String Function()? _obtenerUid;
 
-  /// Dependencia temporal: estadoNotificaciones continúa en Firestore.
-  final Future<void> Function(String notificationId)
-  _limpiarEstadoNotificacion;
+  /// Limpia el estado de la notificación persistido en Supabase.
+  final Future<void> Function(String notificationId) _limpiarEstadoNotificacion;
 
   int _versionDatos = 0;
 
@@ -370,8 +357,8 @@ class TareasService {
     try {
       await _limpiarEstadoNotificacion('tarea-$limpio');
     } catch (_) {
-      // La tarea SQL ya fue eliminada. La metadata residual de Firestore se
-      // limpia best-effort y nunca debe revertir ni ocultar ese resultado.
+      // La tarea SQL ya fue eliminada. La limpieza del estado de notificación
+      // es best-effort y no debe revertir ni ocultar ese resultado.
     }
   }
 
@@ -388,9 +375,8 @@ class TareasService {
     if (a.fechaEntrega != null && b.fechaEntrega != null) {
       final fecha = a.fechaEntrega!.compareTo(b.fechaEntrega!);
       if (fecha != 0) return fecha;
-      final hora = _minutosHora(a.horaEntrega).compareTo(
-        _minutosHora(b.horaEntrega),
-      );
+      final hora = _minutosHora(a.horaEntrega)
+          .compareTo(_minutosHora(b.horaEntrega));
       if (hora != 0) return hora;
     }
     return b.creadaEn.compareTo(a.creadaEn);

@@ -9,6 +9,7 @@ import '../models/perfil_usuario.dart';
 import '../models/ai_conversation.dart';
 import '../models/tarea.dart';
 import 'asignaturas_service.dart';
+import 'ai_deterministic_query_service.dart';
 import 'ai_conversation_context.dart';
 import 'ai_failure_diagnostics.dart';
 import 'ai_function_calling_flow.dart';
@@ -51,6 +52,13 @@ class AiService implements AiAssistantClient {
   late final AiFunctionCallingFlow _functionCallingFlow = AiFunctionCallingFlow(
     logger: _registrarDiagnostico,
   );
+  late final AiDeterministicQueryService _deterministicQueryService =
+      AiDeterministicQueryService(
+        loadSubjects: _asignaturasService.obtenerTodas,
+        loadEvaluations: _evaluacionesService.obtenerTodas,
+        loadTasks: _tareasService.obtenerTodas,
+        logger: _registrarDiagnostico,
+      );
 
   String? _chatUid;
   String? _conversationId;
@@ -214,6 +222,18 @@ REGLAS IMPORTANTES:
     }
 
     final Stopwatch requestStopwatch = Stopwatch()..start();
+    final String? deterministic = await _deterministicQueryService.tryResolve(
+      texto,
+    );
+    if (deterministic != null) {
+      requestStopwatch.stop();
+      _registrarDiagnostico('assistant_request_completed', {
+        'route': 'deterministic',
+        'elapsedMs': requestStopwatch.elapsedMilliseconds,
+      });
+      return deterministic;
+    }
+
     _registrarDiagnostico('assistant_route_selected', {'route': 'gemini'});
     final ChatSession chat = _model.startChat(
       history: _buildModelHistory(

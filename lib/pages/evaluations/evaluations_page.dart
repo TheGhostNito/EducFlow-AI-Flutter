@@ -599,6 +599,7 @@ class _EvaluationsPageState extends State<EvaluationsPage> {
               progress: _progresoHeader,
               title: _espanol ? 'Evaluaciones' : 'Assessments',
               leading: _buildCompactBackButton(oscuro),
+              opaqueBackground: true,
             ),
           ),
           if (_procesando)

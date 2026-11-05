@@ -2,6 +2,7 @@ import 'package:firebase_ai/firebase_ai.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'ai_deterministic_query_service.dart';
 import 'ai_chat_history_service.dart';
 import 'ai_function_calling_flow.dart';
 
@@ -83,6 +84,29 @@ class AiFailureDiagnostics {
             : AiFailureCategory.chatStorage,
         errorType: type,
         retryable: !permission,
+      );
+    }
+
+    if (error is AiLocalQueryException) {
+      final cause = error.cause;
+      final causeType = cause.runtimeType.toString();
+      final message = cause.toString().toLowerCase();
+      final permissionFailure =
+          cause is PostgrestException &&
+              (cause.code == '42501' || cause.code == 'PGRST301') ||
+          _containsAny(message, const [
+            'permission denied',
+            'not authorized',
+            'unauthorized',
+          ]);
+      return AiFailureDiagnostics(
+        category: permissionFailure
+            ? AiFailureCategory.academicDataPermission
+            : _looksLikeConnectivityFailure(causeType, message)
+            ? AiFailureCategory.academicDataConnectivity
+            : AiFailureCategory.academicData,
+        errorType: causeType,
+        retryable: !permissionFailure,
       );
     }
 
