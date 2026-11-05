@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../../models/asignatura.dart';
 import '../../../models/perfil_usuario.dart';
 import '../../../services/time_format_service.dart';
+import '../../../widgets/form_sticky_action_bar.dart';
 
 class SubjectEditPanel extends StatefulWidget {
   const SubjectEditPanel({
@@ -13,7 +14,7 @@ class SubjectEditPanel extends StatefulWidget {
     required this.spanish,
     required this.saving,
     required this.creating,
-    required this.onCancel,
+    required this.submitController,
     required this.onSave,
   });
 
@@ -23,8 +24,7 @@ class SubjectEditPanel extends StatefulWidget {
   final bool spanish;
   final bool saving;
   final bool creating;
-
-  final VoidCallback onCancel;
+  final FormSubmitController submitController;
 
   final Future<void> Function(Asignatura subject) onSave;
 
@@ -61,6 +61,8 @@ class _SubjectEditPanelState extends State<SubjectEditPanel> {
   late List<BloqueHorario> _schedule;
 
   bool _showErrors = false;
+
+  late final Future<void> Function() _submitCallback;
 
   // =========================================================
   // NIVEL EDUCATIVO
@@ -111,6 +113,9 @@ class _SubjectEditPanelState extends State<SubjectEditPanel> {
   @override
   void initState() {
     super.initState();
+
+    _submitCallback = _save;
+    widget.submitController.attach(_submitCallback);
 
     _timeFormatService.addListener(_actualizarFormatoHora);
 
@@ -163,7 +168,18 @@ class _SubjectEditPanelState extends State<SubjectEditPanel> {
   }
 
   @override
+  void didUpdateWidget(covariant SubjectEditPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.submitController != widget.submitController) {
+      oldWidget.submitController.detach(_submitCallback);
+      widget.submitController.attach(_submitCallback);
+    }
+  }
+
+  @override
   void dispose() {
+    widget.submitController.detach(_submitCallback);
     _timeFormatService.removeListener(_actualizarFormatoHora);
     _nameController.dispose();
     _teacherController.dispose();
@@ -837,10 +853,6 @@ class _SubjectEditPanelState extends State<SubjectEditPanel> {
                 : 'Check the schedule blocks. End time must be later than start time.',
           ),
         ],
-
-        const SizedBox(height: 22),
-
-        _buildActions(dark),
       ],
     );
   }
@@ -1634,63 +1646,6 @@ class _SubjectEditPanelState extends State<SubjectEditPanel> {
           height: 1.4,
         ),
       ),
-    );
-  }
-
-  Widget _buildActions(bool dark) {
-    return Row(
-      children: [
-        Expanded(
-          child: SizedBox(
-            height: 49,
-            child: OutlinedButton(
-              onPressed: widget.saving ? null : widget.onCancel,
-              child: Text(widget.spanish ? 'Cancelar' : 'Cancel'),
-            ),
-          ),
-        ),
-
-        const SizedBox(width: 10),
-
-        Expanded(
-          child: SizedBox(
-            height: 49,
-            child: ElevatedButton(
-              onPressed: widget.saving ? null : _save,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _primaryColor,
-                foregroundColor: Colors.white,
-                disabledBackgroundColor: _primaryColor.withValues(alpha: 0.5),
-                elevation: 0,
-              ),
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 180),
-                child: widget.saving
-                    ? const SizedBox(
-                        key: ValueKey('saving'),
-                        width: 21,
-                        height: 21,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.4,
-                          color: Colors.white,
-                        ),
-                      )
-                    : Text(
-                        widget.creating
-                            ? (widget.spanish
-                                  ? 'Guardar asignatura'
-                                  : 'Save subject')
-                            : (widget.spanish
-                                  ? 'Guardar cambios'
-                                  : 'Save changes'),
-                        key: const ValueKey('save'),
-                        style: const TextStyle(fontWeight: FontWeight.w700),
-                      ),
-              ),
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

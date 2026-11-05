@@ -10,6 +10,7 @@ import '../../widgets/app_pressable.dart';
 import '../../widgets/app_reveal.dart';
 import '../../widgets/app_scroll_header.dart';
 import '../../widgets/app_status_snackbar.dart';
+import '../../widgets/form_sticky_action_bar.dart';
 import 'widgets/profile_education_level_sheet.dart';
 import 'widgets/profile_edit_panel.dart';
 
@@ -35,6 +36,8 @@ class _ProfilePageState extends State<ProfilePage> {
   final TranslationService _translationService = TranslationService.instance;
 
   final ScrollController _scrollController = ScrollController();
+
+  final FormSubmitController _profileSubmitController = FormSubmitController();
 
   static const Color _primaryColor = Color(0xFF5B5FEF);
 
@@ -77,6 +80,9 @@ class _ProfilePageState extends State<ProfilePage> {
   bool get _esCursoOtro =>
       _nivelActual == NivelEducativoPerfil.curso ||
       _nivelActual == NivelEducativoPerfil.otro;
+
+  bool get _mostrarBarraEdicion =>
+      _modoEdicion && !_cargando && !_error && _perfil != null;
 
   String get _nombre {
     final String nombre = _perfil?.nombre.trim() ?? '';
@@ -565,7 +571,7 @@ class _ProfilePageState extends State<ProfilePage> {
             initialEducationLevel: _nivelActual,
             spanish: _espanol,
             saving: _guardando,
-            onCancel: _cancelarEdicion,
+            submitController: _profileSubmitController,
             onSave: _guardarPerfil,
           ),
         ),
@@ -578,7 +584,19 @@ class _ProfilePageState extends State<ProfilePage> {
     final bool oscuro = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
+      extendBody: true,
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      bottomNavigationBar: _mostrarBarraEdicion
+          ? FormStickyActionBar(
+              cancelLabel: _espanol ? 'Cancelar' : 'Cancel',
+              saveLabel: _espanol ? 'Guardar cambios' : 'Save changes',
+              saving: _guardando,
+              onCancel: _cancelarEdicion,
+              onSave: () {
+                _profileSubmitController.submit();
+              },
+            )
+          : null,
       body: Stack(
         children: [
           Positioned.fill(
@@ -604,7 +622,9 @@ class _ProfilePageState extends State<ProfilePage> {
                         horizontal,
                         ancho <= 600 ? 24 : 32,
                         horizontal,
-                        60,
+                        _mostrarBarraEdicion
+                            ? FormStickyActionBar.contentClearance(ancho)
+                            : 60,
                       ),
                       children: [
                         Center(
@@ -660,6 +680,7 @@ class _ProfilePageState extends State<ProfilePage> {
               progress: _progresoHeader,
               title: _espanol ? 'Perfil académico' : 'Academic profile',
               leading: _buildCompactBackButton(oscuro),
+              opaqueBackground: true,
             ),
           ),
         ],

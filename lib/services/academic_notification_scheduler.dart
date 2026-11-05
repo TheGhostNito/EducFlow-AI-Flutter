@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 
 import '../core/auth/session_controller.dart';
 import '../models/asignatura.dart';
@@ -41,12 +41,12 @@ class AcademicNotificationRequest {
   final String payload;
 }
 
-class AcademicNotificationScheduler {
+class AcademicNotificationScheduler with WidgetsBindingObserver {
   factory AcademicNotificationScheduler._() {
     final notificationService = NotificationService.instance;
     return AcademicNotificationScheduler._internal(
       sessionController: SessionController.instance,
-      firestore: FirebaseFirestore.instance,
+      preferencesService: UserPreferencesService.instance,
       translationService: TranslationService.instance,
       isSpanish: () => TranslationService.instance.isSpanish,
       loadPreferences: () => UserPreferencesService.instance
@@ -85,7 +85,7 @@ class AcademicNotificationScheduler {
 
   AcademicNotificationScheduler._internal({
     required this._sessionController,
-    required this._firestore,
+    this._preferencesService,
     required this._translationService,
     required this._isSpanish,
     required this._loadPreferences,
@@ -122,7 +122,7 @@ class AcademicNotificationScheduler {
   }) {
     return AcademicNotificationScheduler._internal(
       sessionController: sessionController,
-      firestore: null,
+      preferencesService: null,
       translationService: null,
       isSpanish: () => true,
       loadPreferences: loadPreferences ?? () async => UserPreferences.defaults,
@@ -147,7 +147,7 @@ class AcademicNotificationScheduler {
   static const String _payloadPrefix = 'academic|';
 
   final SessionController _sessionController;
-  final FirebaseFirestore? _firestore;
+  final UserPreferencesService? _preferencesService;
   final TranslationService? _translationService;
   final bool Function() _isSpanish;
   final Future<UserPreferences> Function() _loadPreferences;
@@ -165,8 +165,7 @@ class AcademicNotificationScheduler {
   _scheduleNotification;
   final Duration syncDelay;
 
-  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
-  _preferencesSubscription;
+  bool _watchingPreferences = false;
 
   StreamSubscription<void>? _subjectsSubscription;
   StreamSubscription<void>? _tasksSubscription;
@@ -192,6 +191,7 @@ class AcademicNotificationScheduler {
 
     _started = true;
 
+    if (_preferencesService != null) WidgetsBinding.instance.addObserver(this);
     _translationService?.addListener(_onLanguageChanged);
     _sessionController.addListener(_onSessionChanged);
     _onSessionChanged();
@@ -209,11 +209,18 @@ class AcademicNotificationScheduler {
     _scheduleSync();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _scheduleSync();
+  }
+
   void _watchUser(SessionTicket? ticket) {
     _debounce?.cancel();
 
-    unawaited(_preferencesSubscription?.cancel());
-    _preferencesSubscription = null;
+    if (_watchingPreferences) {
+      _preferencesService?.removeListener(_scheduleSync);
+      _watchingPreferences = false;
+    }
     unawaited(_subjectsSubscription?.cancel());
     _subjectsSubscription = null;
     unawaited(_tasksSubscription?.cancel());
@@ -256,19 +263,10 @@ class AcademicNotificationScheduler {
       );
     }
 
-    final firestore = _firestore;
-    if (firestore == null) {
-      _scheduleSync();
-      return;
+    if (_preferencesService != null) {
+      _preferencesService.addListener(_scheduleSync);
+      _watchingPreferences = true;
     }
-
-    final DocumentReference<Map<String, dynamic>> userRef = firestore
-        .collection('usuarios')
-        .doc(ticket.uid);
-
-    _preferencesSubscription = userRef.snapshots().listen((_) {
-      _scheduleSync();
-    }, onError: (_) {});
 
     _scheduleSync();
   }
@@ -794,7 +792,13 @@ class AcademicNotificationScheduler {
     _translationService?.removeListener(_onLanguageChanged);
 
     _sessionController.removeListener(_onSessionChanged);
-    await _preferencesSubscription?.cancel();
+    if (_watchingPreferences) {
+      _preferencesService?.removeListener(_scheduleSync);
+      _watchingPreferences = false;
+    }
+    if (_preferencesService != null) {
+      WidgetsBinding.instance.removeObserver(this);
+    }
     await _subjectsSubscription?.cancel();
     await _tasksSubscription?.cancel();
     await _evaluationsSubscription?.cancel();

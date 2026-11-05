@@ -1,8 +1,7 @@
 import 'dart:async';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 
 import '../core/auth/session_controller.dart';
 import '../models/asignatura.dart';
@@ -15,13 +14,13 @@ import 'notification_feed_service.dart';
 import 'notification_state_service.dart';
 import 'tareas_service.dart';
 
-class NotificationBadgeService extends ChangeNotifier {
+class NotificationBadgeService extends ChangeNotifier
+    with WidgetsBindingObserver {
   NotificationBadgeService._();
 
   static final NotificationBadgeService instance = NotificationBadgeService._();
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   final AsignaturasService _asignaturasService = AsignaturasService.instance;
   final TareasService _tareasService = TareasService.instance;
@@ -30,8 +29,6 @@ class NotificationBadgeService extends ChangeNotifier {
   final NotificationStateService _stateService =
       NotificationStateService.instance;
 
-  final List<StreamSubscription<QuerySnapshot<Map<String, dynamic>>>>
-  _dataSubscriptions = [];
   StreamSubscription<void>? _subjectsSubscription;
   StreamSubscription<void>? _tasksSubscription;
   StreamSubscription<void>? _evaluationsSubscription;
@@ -56,8 +53,17 @@ class NotificationBadgeService extends ChangeNotifier {
 
     _started = true;
 
+    WidgetsBinding.instance.addObserver(this);
+    _stateService.addListener(_scheduleRefresh);
     SessionController.instance.addListener(_onSessionChanged);
     _onSessionChanged();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _started) {
+      unawaited(refresh());
+    }
   }
 
   void _onSessionChanged() {
@@ -140,11 +146,6 @@ class NotificationBadgeService extends ChangeNotifier {
   void _watchUser(User? user) {
     _debounce?.cancel();
 
-    for (final subscription in _dataSubscriptions) {
-      unawaited(subscription.cancel());
-    }
-
-    _dataSubscriptions.clear();
     unawaited(_subjectsSubscription?.cancel());
     _subjectsSubscription = null;
     unawaited(_tasksSubscription?.cancel());
@@ -156,10 +157,6 @@ class NotificationBadgeService extends ChangeNotifier {
       _setUnreadCount(0);
       return;
     }
-
-    final DocumentReference<Map<String, dynamic>> userRef = _firestore
-        .collection('usuarios')
-        .doc(user.uid);
 
     _subjectsSubscription = _asignaturasService.observarCambios().listen(
       (_) => _scheduleRefresh(),
@@ -179,23 +176,7 @@ class NotificationBadgeService extends ChangeNotifier {
         // Realtime puede reconectarse sin borrar el último contador visible.
       },
     );
-    _listen(userRef.collection('estadoNotificaciones'));
-
     _scheduleRefresh();
-  }
-
-  void _listen(CollectionReference<Map<String, dynamic>> collection) {
-    final subscription = collection.snapshots().listen(
-      (_) {
-        _scheduleRefresh();
-      },
-      onError: (_) {
-        // Un listener puede fallar temporalmente sin invalidar
-        // el último contador que ya estaba visible.
-      },
-    );
-
-    _dataSubscriptions.add(subscription);
   }
 
   void _scheduleRefresh() {
@@ -220,13 +201,9 @@ class NotificationBadgeService extends ChangeNotifier {
   @override
   void dispose() {
     _debounce?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    _stateService.removeListener(_scheduleRefresh);
     SessionController.instance.removeListener(_onSessionChanged);
-
-    for (final subscription in _dataSubscriptions) {
-      unawaited(subscription.cancel());
-    }
-
-    _dataSubscriptions.clear();
     unawaited(_subjectsSubscription?.cancel());
     _subjectsSubscription = null;
     unawaited(_tasksSubscription?.cancel());

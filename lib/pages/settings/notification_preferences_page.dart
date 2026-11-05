@@ -103,7 +103,7 @@ class _NotificationPreferencesPageState
     final int version = ++_saveVersion;
 
     // Actualización optimista: el control cambia al instante y
-    // los demás no se deshabilitan mientras Firestore responde.
+    // los demás no se deshabilitan mientras Supabase responde.
     setState(() {
       _preferences = next;
     });

@@ -159,13 +159,15 @@ class SessionPreparationService {
     SessionValidityGuard isValid,
   ) async {
     _checkValid(isValid);
+    // Una cuenta existente sin fila SQL puede tener preferencias heredadas
+    // todavía pendientes de conciliación. No creamos defaults encima de ellas.
+    if (registration == null) return;
     final initialPreferences = UserPreferences.defaults.copyWith(
-      language: registration?.language ?? profile.idioma,
-      theme: registration?.theme,
+      language: registration.language,
+      theme: registration.theme,
     );
-    await UserPreferencesService.instance.ensureCompatibilityRoot(
+    await UserPreferencesService.instance.ensureInitialRow(
       uid: identity.uid,
-      email: registration?.email ?? identity.email ?? '',
       initialPreferences: initialPreferences,
     );
   }

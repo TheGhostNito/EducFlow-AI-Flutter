@@ -5,14 +5,17 @@ import 'package:ionicons/ionicons.dart';
 import '../../core/auth/auth_service.dart';
 import '../../models/asignatura.dart';
 import '../../models/perfil_usuario.dart';
+import '../../models/malla_entry_status.dart';
 import '../../services/asignaturas_service.dart';
 import '../../services/perfil_service.dart';
 import '../../services/translation_service.dart';
+import '../../services/malla_curricular_service.dart';
 import '../../widgets/app_pressable.dart';
 import '../../widgets/app_reveal.dart';
 import '../../widgets/app_scroll_header.dart';
 import '../../widgets/app_status_snackbar.dart';
 import 'subject_detail_page.dart';
+import '../ocr/malla_curricular_page.dart';
 
 import '../../widgets/app_swipe_delete.dart';
 
@@ -49,6 +52,7 @@ class _SubjectsPageState extends State<SubjectsPage> {
 
   bool _cargando = true;
   bool _error = false;
+  MallaEntryStatus _mallaEntryState = MallaEntryStatus.loading;
 
   double _progresoHeader = 0;
 
@@ -164,6 +168,7 @@ class _SubjectsPageState extends State<SubjectsPage> {
         _asignaturas = asignaturas;
         _error = false;
       });
+      if (_esSuperior) await _loadMallaEntry();
     } catch (_) {
       if (!mounted) {
         return;
@@ -179,6 +184,26 @@ class _SubjectsPageState extends State<SubjectsPage> {
         setState(() {
           _cargando = false;
         });
+      }
+    }
+  }
+
+  Future<void> _loadMallaEntry() async {
+    if (!mounted) return;
+    setState(() => _mallaEntryState = MallaEntryStatus.loading);
+    try {
+      final exists = await MallaCurricularService().existe();
+      if (mounted) {
+        setState(
+          () => _mallaEntryState = exists
+              ? MallaEntryStatus.present
+              : MallaEntryStatus.absent,
+        );
+      }
+    } catch (error) {
+      debugPrint('Consulta de entrada de malla: ${error.runtimeType}');
+      if (mounted) {
+        setState(() => _mallaEntryState = MallaEntryStatus.error);
       }
     }
   }
@@ -564,16 +589,12 @@ class _SubjectsPageState extends State<SubjectsPage> {
     });
   }
 
-  void _importarMalla() {
+  Future<void> _importarMalla() async {
     HapticFeedback.selectionClick();
-
-    showAppStatusSnackBar(
-      context,
-      message: _espanol
-          ? 'La importación de malla se conectará cuando migremos Gemini.'
-          : 'Curriculum import will be connected when Gemini is migrated.',
-      type: AppStatusType.info,
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(builder: (_) => const MallaCurricularPage()),
     );
+    await _loadMallaEntry();
   }
 
   void _importarHorario() {
@@ -939,11 +960,9 @@ class _SubjectsPageState extends State<SubjectsPage> {
         _buildActionCard(
           oscuro: oscuro,
           icon: Ionicons.documentTextOutline,
-          title: _espanol ? 'Importar malla' : 'Import curriculum',
-          description: _espanol
-              ? 'Analiza tu malla académica para preparar tus ramos.'
-              : 'Analyze your curriculum to prepare your courses.',
-          onTap: _importarMalla,
+          title: _mallaEntryState.title(_espanol),
+          description: _mallaEntryState.description(_espanol),
+          onTap: _mallaEntryState.enabled ? _importarMalla : null,
         ),
 
       _buildActionCard(
@@ -976,7 +995,7 @@ class _SubjectsPageState extends State<SubjectsPage> {
     required IconData icon,
     required String title,
     required String description,
-    required VoidCallback onTap,
+    required VoidCallback? onTap,
   }) {
     return AppPressable(
       scale: 0.985,

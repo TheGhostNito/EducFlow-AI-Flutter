@@ -9,6 +9,9 @@ import '../models/perfil_usuario.dart';
 import '../models/ai_conversation.dart';
 import '../models/tarea.dart';
 import 'asignaturas_service.dart';
+import 'ai_deterministic_query_service.dart';
+import 'ai_conversation_context.dart';
+import 'ai_failure_diagnostics.dart';
 import 'ai_function_calling_flow.dart';
 import 'analisis_notas_ia_service.dart';
 import 'calculo_notas_service.dart';
@@ -25,13 +28,17 @@ abstract interface class AiAssistantClient {
     List<AiChatMessage> history = const [],
   });
 
-  Future<String> enviarMensaje(String mensaje);
+  Future<String> enviarMensaje(
+    String mensaje, {
+    required List<AiChatMessage> history,
+  });
 }
 
 class AiService implements AiAssistantClient {
   AiService._();
 
   static final AiService instance = AiService._();
+  static const String modelName = 'gemini-3.5-flash';
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final PerfilService _perfilService = PerfilService();
@@ -45,12 +52,20 @@ class AiService implements AiAssistantClient {
   late final AiFunctionCallingFlow _functionCallingFlow = AiFunctionCallingFlow(
     logger: _registrarDiagnostico,
   );
+  late final AiDeterministicQueryService _deterministicQueryService =
+      AiDeterministicQueryService(
+        loadSubjects: _asignaturasService.obtenerTodas,
+        loadEvaluations: _evaluacionesService.obtenerTodas,
+        loadTasks: _tareasService.obtenerTodas,
+        logger: _registrarDiagnostico,
+      );
 
-  ChatSession? _chat;
   String? _chatUid;
+  String? _conversationId;
+  List<AiChatMessage> _loadedHistory = const [];
 
   late final GenerativeModel _model = FirebaseAI.googleAI().generativeModel(
-    model: 'gemini-3.5-flash',
+    model: modelName,
     generationConfig: GenerationConfig(
       temperature: 0.35,
       maxOutputTokens: 1800,
@@ -146,8 +161,9 @@ REGLAS IMPORTANTES:
 
   @override
   void iniciarNuevoChat() {
-    _chat = null;
     _chatUid = null;
+    _conversationId = null;
+    _loadedHistory = const [];
   }
 
   @override
@@ -162,41 +178,19 @@ REGLAS IMPORTANTES:
       throw StateError('No existe un usuario autenticado.');
     }
 
-    _chat = _model.startChat(
-      history: _buildModelHistory(history),
-      maxTurns: 40,
-    );
-
     _chatUid = user.uid;
+    _conversationId = conversationId;
+    _loadedHistory = List<AiChatMessage>.of(history);
   }
 
-  ChatSession _obtenerChat(String uid) {
-    if (_chat == null || _chatUid != uid) {
-      _chat = _model.startChat(maxTurns: 40);
-      _chatUid = uid;
-    }
-
-    return _chat!;
-  }
-
-  List<Content> _buildModelHistory(List<AiChatMessage> messages) {
-    final List<AiChatMessage> valid = messages
-        .where((message) => !message.isError && message.text.trim().isNotEmpty)
-        .toList();
-
-    if (valid.length > 24) {
-      valid.removeRange(0, valid.length - 24);
-    }
-
-    while (valid.isNotEmpty && valid.first.role == AiChatRole.assistant) {
-      valid.removeAt(0);
-    }
-
-    while (valid.isNotEmpty && valid.last.role == AiChatRole.user) {
-      valid.removeLast();
-    }
-
-    return valid.map((message) {
+  List<Content> _buildModelHistory(
+    List<AiChatMessage> messages,
+    String currentMessage,
+  ) {
+    return AiConversationContext.completedHistory(
+      messages,
+      currentMessage: currentMessage,
+    ).map((message) {
       if (message.role == AiChatRole.user) {
         return Content.text(message.text);
       }
@@ -206,7 +200,10 @@ REGLAS IMPORTANTES:
   }
 
   @override
-  Future<String> enviarMensaje(String mensaje) async {
+  Future<String> enviarMensaje(
+    String mensaje, {
+    required List<AiChatMessage> history,
+  }) async {
     final String texto = mensaje.trim();
 
     if (texto.isEmpty) {
@@ -218,10 +215,35 @@ REGLAS IMPORTANTES:
     if (user == null) {
       throw StateError('No existe un usuario autenticado.');
     }
+    if (_chatUid != user.uid || _conversationId == null) {
+      throw StateError(
+        'La conversación activa no pertenece al usuario actual.',
+      );
+    }
 
-    final ChatSession chat = _obtenerChat(user.uid);
+    final Stopwatch requestStopwatch = Stopwatch()..start();
+    final String? deterministic = await _deterministicQueryService.tryResolve(
+      texto,
+    );
+    if (deterministic != null) {
+      requestStopwatch.stop();
+      _registrarDiagnostico('assistant_request_completed', {
+        'route': 'deterministic',
+        'elapsedMs': requestStopwatch.elapsedMilliseconds,
+      });
+      return deterministic;
+    }
+
+    _registrarDiagnostico('assistant_route_selected', {'route': 'gemini'});
+    final ChatSession chat = _model.startChat(
+      history: _buildModelHistory(
+        history.isEmpty ? _loadedHistory : history,
+        texto,
+      ),
+      maxTurns: 40,
+    );
     try {
-      return await _functionCallingFlow.run(
+      final String response = await _functionCallingFlow.run(
         sendInitialMessage: () async {
           final response = await chat.sendMessage(Content.text(texto));
           return _convertirTurno(response);
@@ -241,11 +263,24 @@ REGLAS IMPORTANTES:
           return _convertirTurno(response);
         },
       );
-    } on AiRequestTimeoutException {
-      // El Future remoto puede completar más tarde. Descartamos esta sesión
-      // para que un reintento no quede ligado a un turno de resultado incierto.
-      _chat = null;
-      _chatUid = null;
+      requestStopwatch.stop();
+      _registrarDiagnostico('assistant_request_completed', {
+        'route': 'gemini',
+        'elapsedMs': requestStopwatch.elapsedMilliseconds,
+      });
+      return response;
+    } catch (error) {
+      requestStopwatch.stop();
+      final AiFailureDiagnostics diagnostics = AiFailureDiagnostics.from(error);
+      _registrarDiagnostico('assistant_request_failed', {
+        'route': 'gemini',
+        'model': modelName,
+        'provider': 'geminiDeveloperApi',
+        'elapsedMs': requestStopwatch.elapsedMilliseconds,
+        ...diagnostics.toSafeLog(),
+      });
+      // Cada solicitud reconstruye una sesión desde el historial confirmado.
+      // Una operación fallida no contamina el siguiente turno ni se reenvía.
       rethrow;
     }
   }

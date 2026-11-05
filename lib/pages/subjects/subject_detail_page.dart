@@ -12,6 +12,7 @@ import '../../widgets/app_pressable.dart';
 import '../../widgets/app_reveal.dart';
 import '../../widgets/app_scroll_header.dart';
 import '../../widgets/app_status_snackbar.dart';
+import '../../widgets/form_sticky_action_bar.dart';
 import '../evaluations/evaluations_page.dart';
 import '../tasks/tasks_page.dart';
 import 'widgets/subject_edit_panel.dart';
@@ -56,6 +57,8 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
 
   final ScrollController _scrollController = ScrollController();
 
+  final FormSubmitController _subjectSubmitController = FormSubmitController();
+
   final HorarioConflictService _horarioConflictService =
       HorarioConflictService.instance;
 
@@ -89,6 +92,13 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
   bool get _esCursoOtro =>
       _nivel == NivelEducativoPerfil.curso ||
       _nivel == NivelEducativoPerfil.otro;
+
+  bool get _mostrarBarraEdicion =>
+      _modoEdicion &&
+      !_cargando &&
+      !_error &&
+      _perfil != null &&
+      _asignatura != null;
 
   @override
   void initState() {
@@ -1044,7 +1054,22 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
     final bool oscuro = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
+      extendBody: true,
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      bottomNavigationBar: _mostrarBarraEdicion
+          ? FormStickyActionBar(
+              cancelLabel: _espanol ? 'Cancelar' : 'Cancel',
+              saveLabel: _creando
+                  ? (_espanol ? 'Guardar asignatura' : 'Save subject')
+                  : (_espanol ? 'Guardar cambios' : 'Save changes'),
+              saving: _guardando,
+              onCancel: _cancelarEdicion,
+              onSave: () {
+                _subjectSubmitController.submit();
+              },
+              maxContentWidth: 760,
+            )
+          : null,
       body: Stack(
         children: [
           Positioned.fill(
@@ -1057,7 +1082,16 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
                   physics: const AlwaysScrollableScrollPhysics(),
                   keyboardDismissBehavior:
                       ScrollViewKeyboardDismissBehavior.onDrag,
-                  padding: const EdgeInsets.fromLTRB(10, 24, 10, 60),
+                  padding: EdgeInsets.fromLTRB(
+                    10,
+                    24,
+                    10,
+                    _mostrarBarraEdicion
+                        ? FormStickyActionBar.contentClearance(
+                            MediaQuery.sizeOf(context).width,
+                          )
+                        : 60,
+                  ),
                   children: [
                     Center(
                       child: ConstrainedBox(
@@ -1083,7 +1117,7 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
                               spanish: _espanol,
                               saving: _guardando,
                               creating: _creando,
-                              onCancel: _cancelarEdicion,
+                              submitController: _subjectSubmitController,
                               onSave: _guardarAsignatura,
                             ),
                           ),

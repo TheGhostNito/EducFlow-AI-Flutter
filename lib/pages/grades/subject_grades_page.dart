@@ -344,6 +344,7 @@ class _SubjectGradesPageState extends State<SubjectGradesPage> {
                 progress: _progresoHeader,
                 title: widget.asignatura.nombre,
                 leading: _backButton(oscuro, compact: true),
+                opaqueBackground: true,
               ),
             ),
           ],

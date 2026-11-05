@@ -1,6 +1,8 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart'
+    show Supabase, SupabaseClient;
 
 class NotificationPreferences {
   const NotificationPreferences({
@@ -175,19 +177,93 @@ class UserPreferences {
       notifications: notifications,
     );
   }
+
+  factory UserPreferences.fromDatabase(Map<String, dynamic> row) {
+    return UserPreferences.fromMap({
+      'tema': row['tema'],
+      'idioma': row['idioma'],
+      'formatoHora': row['formato_hora'],
+      'notificaciones': {
+        'activadas': row['notificaciones_activadas'],
+        'clases': row['notificaciones_clases'],
+        'minutosAntesClase': row['minutos_antes_clase'],
+        'tareas': row['notificaciones_tareas'],
+        'horaTareas': _databaseTime(row['hora_tareas']),
+        'evaluaciones': row['notificaciones_evaluaciones'],
+        'horaEvaluaciones': _databaseTime(row['hora_evaluaciones']),
+      },
+    });
+  }
+
+  static String? _databaseTime(Object? value) {
+    final raw = value?.toString();
+    return raw == null || raw.length < 5 ? raw : raw.substring(0, 5);
+  }
 }
 
-class UserPreferencesService {
-  UserPreferencesService._();
+abstract interface class UserPreferencesDataSource {
+  Future<Map<String, dynamic>?> get(String uid);
+  Future<void> insertIfMissing(Map<String, dynamic> values);
+  Future<void> update(String uid, Map<String, dynamic> values);
+}
 
-  static final UserPreferencesService instance = UserPreferencesService._();
+class SupabaseUserPreferencesDataSource implements UserPreferencesDataSource {
+  SupabaseUserPreferencesDataSource(this._client);
 
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final SupabaseClient _client;
+
+  @override
+  Future<Map<String, dynamic>?> get(String uid) async {
+    final row = await _client
+        .from('preferencias_usuario')
+        .select()
+        .eq('usuario_uid', uid)
+        .maybeSingle();
+    return row == null ? null : Map<String, dynamic>.from(row);
+  }
+
+  @override
+  Future<void> insertIfMissing(Map<String, dynamic> values) async {
+    await _client
+        .from('preferencias_usuario')
+        .upsert(values, onConflict: 'usuario_uid', ignoreDuplicates: true);
+  }
+
+  @override
+  Future<void> update(String uid, Map<String, dynamic> values) async {
+    await _client
+        .from('preferencias_usuario')
+        .update(values)
+        .eq('usuario_uid', uid);
+  }
+}
+
+class UserPreferencesService extends ChangeNotifier {
+  UserPreferencesService({
+    UserPreferencesDataSource? dataSource,
+    this._auth,
+    this._uidProvider,
+  }) : _dataSourceOverride = dataSource;
+
+  static final UserPreferencesService instance = UserPreferencesService();
+
+  UserPreferencesDataSource? _dataSourceOverride;
+  UserPreferencesDataSource get _dataSource =>
+      _dataSourceOverride ??
+      SupabaseUserPreferencesDataSource(Supabase.instance.client);
+
+  @visibleForTesting
+  void useDataSourceForTesting(UserPreferencesDataSource? dataSource) {
+    _dataSourceOverride = dataSource;
+    _memoryCache.clear();
+  }
+
+  final FirebaseAuth? _auth;
+  final String? Function()? _uidProvider;
   final Map<String, UserPreferences> _memoryCache = {};
 
-  User? get currentUser => _auth.currentUser;
-  String? get currentUid => currentUser?.uid;
+  User? get currentUser => (_auth ?? FirebaseAuth.instance).currentUser;
+  String? get currentUid => _uidProvider?.call() ?? currentUser?.uid;
 
   Future<UserPreferences> getCurrentPreferences({
     bool forceRefresh = false,
@@ -205,6 +281,9 @@ class UserPreferencesService {
     String uid, {
     bool forceRefresh = false,
   }) async {
+    if (currentUid != uid) {
+      throw StateError('Las preferencias no pertenecen a la sesión activa.');
+    }
     if (!forceRefresh) {
       final UserPreferences? memory = _memoryCache[uid];
 
@@ -214,44 +293,26 @@ class UserPreferencesService {
     }
 
     try {
-      final DocumentSnapshot<Map<String, dynamic>> snapshot = await _firestore
-          .collection('usuarios')
-          .doc(uid)
-          .get();
-
-      final Map<String, dynamic>? data = snapshot.data();
-
-      if (data != null) {
-        final dynamic rawPreferences = data['preferencias'];
-
-        if (rawPreferences is Map) {
-          final UserPreferences preferences = UserPreferences.fromMap(
-            Map<String, dynamic>.from(rawPreferences),
-          );
-
-          _memoryCache[uid] = preferences;
-          try {
-            await _saveLocalCache(uid, preferences);
-          } catch (_) {
-            // La lectura remota confirmada sigue siendo autoritativa.
-          }
-
-          return preferences;
+      final row = await _dataSource.get(uid);
+      if (currentUid != uid) {
+        throw StateError('La sesión cambió durante la lectura.');
+      }
+      if (row != null) {
+        final preferences = UserPreferences.fromDatabase(row);
+        _memoryCache[uid] = preferences;
+        try {
+          await _saveLocalCache(uid, preferences);
+        } catch (_) {
+          // SQL sigue siendo la fuente de verdad.
         }
-
-        final String language = data['idioma']?.toString() == 'en'
-            ? 'en'
-            : 'es';
-
-        final UserPreferences preferences = UserPreferences.defaults.copyWith(
-          language: language,
-        );
-
-        await _savePreferences(uid, preferences);
         return preferences;
       }
     } catch (_) {
-      // Si Firestore falla, intentamos usar la caché local de esta cuenta.
+      // Si SQL falla, intentamos usar la caché local de esta cuenta.
+    }
+
+    if (currentUid != uid) {
+      throw StateError('La sesión cambió durante la lectura.');
     }
 
     final UserPreferences? local = await _readLocalCache(uid);
@@ -267,25 +328,19 @@ class UserPreferencesService {
   Future<void> setTheme(String theme) async {
     final String? uid = currentUid;
     if (uid == null) return;
-
     final UserPreferences current = await getPreferencesForUser(uid);
-
-    await _savePreferences(
-      uid,
-      current.copyWith(theme: theme == 'dark' ? 'dark' : 'light'),
-    );
+    final value = theme == 'dark' ? 'dark' : 'light';
+    await _saveFields(uid, {'tema': value}, current.copyWith(theme: value));
   }
 
   Future<void> setLanguage(String language) async {
     final String? uid = currentUid;
     if (uid == null) return;
-
     final UserPreferences current = await getPreferencesForUser(uid);
-
-    await _savePreferences(
-      uid,
-      current.copyWith(language: language == 'en' ? 'en' : 'es'),
-    );
+    final value = language == 'en' ? 'en' : 'es';
+    await _saveFields(uid, {
+      'idioma': value,
+    }, current.copyWith(language: value));
   }
 
   Future<void> setTimeFormat(String timeFormat) async {
@@ -300,7 +355,9 @@ class UserPreferencesService {
       _ => 'system',
     };
 
-    await _savePreferences(uid, current.copyWith(timeFormat: value));
+    await _saveFields(uid, {
+      'formato_hora': value,
+    }, current.copyWith(timeFormat: value));
   }
 
   Future<void> setNotificationPreferences(
@@ -311,82 +368,51 @@ class UserPreferencesService {
 
     final UserPreferences current = await getPreferencesForUser(uid);
 
-    await _savePreferences(uid, current.copyWith(notifications: preferences));
+    await _saveFields(uid, {
+      'notificaciones_activadas': preferences.enabled,
+      'notificaciones_clases': preferences.classesEnabled,
+      'minutos_antes_clase': preferences.classLeadMinutes,
+      'notificaciones_tareas': preferences.tasksEnabled,
+      'hora_tareas': preferences.taskReminderTime,
+      'notificaciones_evaluaciones': preferences.evaluationsEnabled,
+      'hora_evaluaciones': preferences.evaluationReminderTime,
+    }, current.copyWith(notifications: preferences));
   }
 
-  Future<void> ensureCompatibilityRoot({
+  Future<void> ensureInitialRow({
     required String uid,
-    required String email,
     required UserPreferences initialPreferences,
   }) async {
     if (currentUid != uid) {
-      throw StateError('La raíz temporal no corresponde a la sesión activa.');
+      throw StateError('Las preferencias no pertenecen a la sesión activa.');
     }
-
-    final authEmail = email.trim();
-    if (authEmail.isEmpty) {
-      throw StateError(
-        'No existe un correo seguro para crear la raíz temporal.',
-      );
-    }
-
-    final ref = _firestore.collection('usuarios').doc(uid);
-    final bool initialized = await _firestore.runTransaction<bool>((tx) async {
-      final snapshot = await tx.get(ref);
-      final data = snapshot.data();
-
-      // La transacción se reintenta si otro cliente crea o modifica la raíz
-      // entre la lectura y la escritura. Así nunca reemplazamos campos que
-      // aparecieron concurrentemente.
-      if (!snapshot.exists) {
-        if (currentUid != uid) {
-          throw StateError('La sesión cambió antes de crear la raíz temporal.');
-        }
-        tx.set(ref, {
-          'uid': uid,
-          'correoPrincipal': authEmail,
-          'fechaCreacion': FieldValue.serverTimestamp(),
-          'preferencias': initialPreferences.toMap(),
-        });
-        return true;
-      }
-
-      if (data?['preferencias'] is! Map) {
-        if (currentUid != uid) {
-          throw StateError(
-            'La sesión cambió antes de completar la raíz temporal.',
-          );
-        }
-        tx.set(ref, {
-          'preferencias': initialPreferences.toMap(),
-        }, SetOptions(merge: true));
-        return true;
-      }
-
-      return false;
+    await _dataSource.insertIfMissing({
+      'usuario_uid': uid,
+      'tema': initialPreferences.theme,
+      'idioma': initialPreferences.language,
     });
-
-    if (initialized && currentUid == uid) {
-      _memoryCache[uid] = initialPreferences;
-      try {
-        await _saveLocalCache(uid, initialPreferences);
-      } catch (_) {
-        // La fuente remota quedó consistente aunque falle la caché local.
-      }
+    if (currentUid != uid) {
+      throw StateError('La sesión cambió durante la preparación.');
     }
+    await getPreferencesForUser(uid, forceRefresh: true);
   }
 
-  Future<void> _savePreferences(String uid, UserPreferences preferences) async {
-    await _firestore.collection('usuarios').doc(uid).set({
-      'preferencias': preferences.toMap(),
-    }, SetOptions(merge: true));
-
+  Future<void> _saveFields(
+    String uid,
+    Map<String, dynamic> fields,
+    UserPreferences preferences,
+  ) async {
+    if (currentUid != uid) throw StateError('La sesión cambió.');
+    await _dataSource.insertIfMissing({'usuario_uid': uid});
+    if (currentUid != uid) throw StateError('La sesión cambió.');
+    await _dataSource.update(uid, fields);
+    if (currentUid != uid) throw StateError('La sesión cambió.');
     _memoryCache[uid] = preferences;
+    notifyListeners();
     try {
       await _saveLocalCache(uid, preferences);
     } catch (_) {
-      // Firestore es la fuente autoritativa; una caché local defectuosa no
-      // debe revertir una escritura remota confirmada.
+      // Una caché local defectuosa no revierte una escritura SQL confirmada.
     }
   }
 

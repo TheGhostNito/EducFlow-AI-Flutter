@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -11,7 +12,9 @@ import '../../widgets/main_section_scroll.dart';
 
 import '../../models/ai_conversation.dart';
 import '../../services/ai_chat_history_service.dart';
+import '../../services/supabase_ai_chat_history_repository.dart';
 import '../../services/ai_function_calling_flow.dart';
+import '../../services/ai_failure_diagnostics.dart';
 import '../../services/ai_service.dart';
 import '../../services/beta_notice_service.dart';
 import '../../services/translation_service.dart';
@@ -43,8 +46,13 @@ class AiChatPage extends StatefulWidget {
   State<AiChatPage> createState() => _AiChatPageState();
 }
 
-class _AiChatPageState extends State<AiChatPage> {
+class _AiChatPageState extends State<AiChatPage> with WidgetsBindingObserver {
   static const Color _primaryColor = Color(0xFF5B5FEF);
+  static const Duration _historyTimeout = Duration(seconds: 10);
+  static const Duration _conversationWriteTimeout = Duration(seconds: 10);
+  static const Duration _messageWriteTimeout = Duration(seconds: 8);
+  static const Duration _assistantTimeout = Duration(seconds: 60);
+  static const Duration _errorWriteTimeout = Duration(seconds: 3);
 
   late final AiAssistantClient _aiService;
   late final AiChatHistoryRepository _historyService;
@@ -62,10 +70,14 @@ class _AiChatPageState extends State<AiChatPage> {
 
   AiConversation? _conversation;
   bool _loadingConversation = true;
+  bool _historyLoadError = false;
   bool _sending = false;
   bool _betaDialogInProgress = false;
   bool _betaDialogInvalidated = false;
   String? _lastFailedMessage;
+  _AiPendingSend? _pendingSend;
+  int _requestGeneration = 0;
+  bool _refreshingHistory = false;
   GlobalKey? _betaDialogKey;
 
   bool get _spanish => _translationService.isSpanish;
@@ -77,10 +89,12 @@ class _AiChatPageState extends State<AiChatPage> {
     _sessionController = widget.sessionController ?? SessionController.instance;
     _betaNoticeService = widget.betaNoticeService ?? BetaNoticeService.instance;
     _aiService = widget.aiService ?? AiService.instance;
-    _historyService = widget.historyService ?? AiChatHistoryService.instance;
+    _historyService =
+        widget.historyService ?? SupabaseAiChatHistoryRepository.instance;
 
     _translationService.addListener(_refreshLanguage);
     _focusNode.addListener(_refreshFocus);
+    WidgetsBinding.instance.addObserver(this);
 
     _loadInitialConversation();
   }
@@ -91,11 +105,14 @@ class _AiChatPageState extends State<AiChatPage> {
     final String? conversationId = _conversation?.id;
 
     if (conversationId != null) {
-      _historyService.markExited(conversationId);
+      unawaited(
+        _historyService.markExited(conversationId).catchError((Object _) {}),
+      );
     }
 
     _translationService.removeListener(_refreshLanguage);
     _focusNode.removeListener(_refreshFocus);
+    WidgetsBinding.instance.removeObserver(this);
 
     _messageController.dispose();
     _scrollController.dispose();
@@ -175,6 +192,14 @@ class _AiChatPageState extends State<AiChatPage> {
   }
 
   Future<void> _loadInitialConversation() async {
+    final int loadGeneration = ++_requestGeneration;
+    final sessionTicket = _sessionController.captureTicket();
+    if (mounted) {
+      setState(() {
+        _loadingConversation = true;
+        _historyLoadError = false;
+      });
+    }
     final override = widget.initialConversationLoadOverride;
     if (override != null) {
       try {
@@ -192,8 +217,16 @@ class _AiChatPageState extends State<AiChatPage> {
       return;
     }
     try {
-      final AiConversation? conversation = await _historyService
-          .getConversationToResume();
+      final AiConversation? conversation = await _awaitStage(
+        _historyService.getConversationToResume(),
+        _historyTimeout,
+        'recuperar_chat',
+      );
+      if (sessionTicket == null ||
+          !_sessionController.isCurrentTicket(sessionTicket) ||
+          loadGeneration != _requestGeneration) {
+        return;
+      }
 
       if (conversation == null) {
         _aiService.iniciarNuevoChat();
@@ -210,9 +243,15 @@ class _AiChatPageState extends State<AiChatPage> {
         return;
       }
 
-      final List<AiChatMessage> messages = await _historyService.getMessages(
-        conversation.id,
+      final List<AiChatMessage> messages = await _awaitStage(
+        _historyService.getMessages(conversation.id),
+        _historyTimeout,
+        'leer_historial',
       );
+      if (!_sessionController.isCurrentTicket(sessionTicket) ||
+          loadGeneration != _requestGeneration) {
+        return;
+      }
 
       _aiService.iniciarConversacion(
         conversationId: conversation.id,
@@ -232,16 +271,22 @@ class _AiChatPageState extends State<AiChatPage> {
 
       _scrollToBottom();
     } catch (error, stackTrace) {
-      debugPrint('EducFlow AI history error: $error');
+      if (sessionTicket == null ||
+          !_sessionController.isCurrentTicket(sessionTicket) ||
+          loadGeneration != _requestGeneration) {
+        return;
+      }
+      debugPrint(
+        'EducFlow AI history error: ${AiFailureDiagnostics.from(error).toSafeLog()}',
+      );
 
       debugPrintStack(
         label: 'EducFlow AI history stack trace',
         stackTrace: stackTrace,
       );
 
-      _aiService.iniciarNuevoChat();
-
       if (mounted) {
+        setState(() => _historyLoadError = true);
         showAppStatusSnackBar(
           context,
           message: _spanish
@@ -251,7 +296,10 @@ class _AiChatPageState extends State<AiChatPage> {
         );
       }
     } finally {
-      if (mounted) {
+      if (mounted &&
+          loadGeneration == _requestGeneration &&
+          sessionTicket != null &&
+          _sessionController.isCurrentTicket(sessionTicket)) {
         setState(() {
           _loadingConversation = false;
         });
@@ -262,27 +310,12 @@ class _AiChatPageState extends State<AiChatPage> {
     }
   }
 
-  Future<AiConversation> _ensureConversation(String firstMessage) async {
-    final AiConversation? current = _conversation;
-
-    if (current != null) {
-      return current;
-    }
-
-    final AiConversation created = await _historyService.createConversation(
-      firstMessage,
-    );
-
-    _aiService.iniciarConversacion(conversationId: created.id);
-
-    if (mounted) {
-      setState(() {
-        _conversation = created;
-      });
-    }
-
-    return created;
-  }
+  Future<T> _awaitStage<T>(Future<T> future, Duration timeout, String stage) =>
+      future.timeout(
+        timeout,
+        onTimeout: () =>
+            throw AiRequestTimeoutException(timeout: timeout, stage: stage),
+      );
 
   void _refreshLanguage() {
     if (mounted) {
@@ -293,6 +326,95 @@ class _AiChatPageState extends State<AiChatPage> {
   void _refreshFocus() {
     if (mounted) {
       setState(() {});
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_refreshCurrentConversation());
+    }
+  }
+
+  Future<void> _refreshCurrentConversation({bool fromHistory = false}) async {
+    final conversation = _conversation;
+    final ticket = _sessionController.captureTicket();
+    if (!mounted ||
+        _refreshingHistory ||
+        _sending ||
+        _loadingConversation ||
+        _historyLoadError ||
+        (!fromHistory && _pendingSend != null) ||
+        conversation == null ||
+        ticket == null ||
+        (!fromHistory && ModalRoute.of(context)?.isCurrent != true)) {
+      return;
+    }
+
+    final generation = _requestGeneration;
+    _refreshingHistory = true;
+    try {
+      final messages = await _awaitStage(
+        _historyService.getMessages(conversation.id),
+        _historyTimeout,
+        'leer_historial',
+      );
+      if (!mounted ||
+          generation != _requestGeneration ||
+          !_sessionController.isCurrentTicket(ticket) ||
+          _conversation?.id != conversation.id ||
+          _sending ||
+          (!fromHistory && _pendingSend != null) ||
+          (!fromHistory && ModalRoute.of(context)?.isCurrent != true)) {
+        return;
+      }
+
+      final pending = _pendingSend;
+      final refreshed = List<AiChatMessage>.of(messages);
+      if (fromHistory && pending != null) {
+        final ids = refreshed.map((message) => message.id).toSet();
+        for (final local in _messages) {
+          if ((local.id == pending.userMessageId ||
+                  local.id == pending.errorMessageId) &&
+              ids.add(local.id)) {
+            refreshed.add(local);
+          }
+        }
+      }
+
+      var unchanged = refreshed.length == _messages.length;
+      if (unchanged) {
+        for (var index = 0; index < refreshed.length; index++) {
+          final local = _messages[index];
+          final remote = refreshed[index];
+          if (local.id != remote.id ||
+              local.role != remote.role ||
+              local.text != remote.text ||
+              local.isError != remote.isError) {
+            unchanged = false;
+            break;
+          }
+        }
+      }
+      if (unchanged) return;
+
+      _aiService.iniciarConversacion(
+        conversationId: conversation.id,
+        history: refreshed,
+      );
+      setState(() {
+        _messages
+          ..clear()
+          ..addAll(refreshed);
+      });
+      _scrollToBottom();
+    } catch (error) {
+      debugPrint(
+        'EducFlow AI history refresh error: '
+        '${AiFailureDiagnostics.from(error, chatStorage: true).toSafeLog()}',
+      );
+    } finally {
+      _refreshingHistory = false;
     }
   }
 
@@ -319,117 +441,165 @@ class _AiChatPageState extends State<AiChatPage> {
   }
 
   Future<void> _openHistory() async {
-    if (_sending) {
+    if (_sending || _loadingConversation || _historyLoadError) {
       return;
     }
+    final ticket = _sessionController.captureTicket();
+    if (ticket == null) return;
+    bool currentSession() =>
+        mounted && _sessionController.isCurrentTicket(ticket);
 
     HapticFeedback.selectionClick();
 
     final AiConversation? current = _conversation;
 
-    if (current != null) {
-      await _historyService.markExited(current.id);
-    }
-
-    if (!mounted) {
-      return;
-    }
-
-    final AiConversation? selected = await Navigator.of(context)
-        .push<AiConversation>(
-          MaterialPageRoute(
-            builder: (_) =>
-                AiChatHistoryPage(currentConversationId: current?.id),
-          ),
+    try {
+      if (current != null) {
+        await _awaitStage(
+          _historyService.markExited(current.id),
+          _conversationWriteTimeout,
+          'salir_chat',
         );
+      }
 
-    if (!mounted) {
-      return;
-    }
+      if (!mounted || !currentSession()) {
+        return;
+      }
 
-    if (selected != null) {
-      if (selected.id != current?.id) {
-        final AiConversation active = await _historyService
-            .reactivateConversation(selected);
+      final AiConversation? selected = await Navigator.of(context)
+          .push<AiConversation>(
+            MaterialPageRoute(
+              builder: (_) => AiChatHistoryPage(
+                currentConversationId: current?.id,
+                historyService: _historyService,
+              ),
+            ),
+          );
 
-        final List<AiChatMessage> messages = await _historyService.getMessages(
-          active.id,
-        );
+      if (!currentSession()) {
+        return;
+      }
 
-        _aiService.iniciarConversacion(
-          conversationId: active.id,
-          history: messages,
-        );
+      if (selected != null) {
+        if (selected.id != current?.id) {
+          final AiConversation active = await _awaitStage(
+            _historyService.reactivateConversation(selected),
+            _conversationWriteTimeout,
+            'reactivar_chat',
+          );
 
-        if (!mounted) {
+          final List<AiChatMessage> messages = await _awaitStage(
+            _historyService.getMessages(active.id),
+            _historyTimeout,
+            'leer_historial',
+          );
+
+          _aiService.iniciarConversacion(
+            conversationId: active.id,
+            history: messages,
+          );
+
+          if (!currentSession()) {
+            return;
+          }
+
+          setState(() {
+            ++_requestGeneration;
+            _conversation = active;
+            _messages
+              ..clear()
+              ..addAll(messages);
+            _pendingSend = null;
+            _lastFailedMessage = null;
+          });
+
+          _scrollToBottom();
+
           return;
         }
 
-        setState(() {
-          _conversation = active;
-          _messages
-            ..clear()
-            ..addAll(messages);
-        });
+        await _awaitStage(
+          _historyService.markEntered(selected.id),
+          _conversationWriteTimeout,
+          'entrar_chat',
+        );
+        await _refreshCurrentConversation(fromHistory: true);
+        return;
+      }
 
-        _scrollToBottom();
+      // Si solo abrió el historial y volvió,
+      // comprobamos nuevamente la ventana
+      // de 30 minutos.
+      final AiConversation? resumed = await _awaitStage(
+        _historyService.getConversationToResume(),
+        _historyTimeout,
+        'recuperar_chat',
+      );
+
+      if (!currentSession()) {
+        return;
+      }
+
+      if (resumed == null) {
+        _aiService.iniciarNuevoChat();
+
+        setState(() {
+          ++_requestGeneration;
+          _conversation = null;
+          _messages.clear();
+          _pendingSend = null;
+          _lastFailedMessage = null;
+        });
 
         return;
       }
 
-      await _historyService.markEntered(selected.id);
+      if (resumed.id == current?.id) {
+        await _refreshCurrentConversation(fromHistory: true);
+        return;
+      }
 
-      return;
-    }
+      final List<AiChatMessage> messages = await _awaitStage(
+        _historyService.getMessages(resumed.id),
+        _historyTimeout,
+        'leer_historial',
+      );
+      if (!currentSession()) return;
 
-    // Si solo abrió el historial y volvió,
-    // comprobamos nuevamente la ventana
-    // de 30 minutos.
-    final AiConversation? resumed = await _historyService
-        .getConversationToResume();
-
-    if (!mounted) {
-      return;
-    }
-
-    if (resumed == null) {
-      _aiService.iniciarNuevoChat();
+      _aiService.iniciarConversacion(
+        conversationId: resumed.id,
+        history: messages,
+      );
 
       setState(() {
-        _conversation = null;
-        _messages.clear();
+        ++_requestGeneration;
+        _conversation = resumed;
+        _messages
+          ..clear()
+          ..addAll(messages);
+        _pendingSend = null;
+        _lastFailedMessage = null;
       });
 
-      return;
+      _scrollToBottom();
+    } catch (error) {
+      if (!mounted || !currentSession()) return;
+      showAppStatusSnackBar(
+        context,
+        message: _spanish
+            ? 'No pude confirmar el cambio de chat. Revisa tu conexión e inténtalo nuevamente.'
+            : 'I could not confirm the chat change. Check your connection and retry.',
+        type: AppStatusType.error,
+      );
     }
-
-    if (resumed.id == current?.id) {
-      return;
-    }
-
-    final List<AiChatMessage> messages = await _historyService.getMessages(
-      resumed.id,
-    );
-
-    _aiService.iniciarConversacion(
-      conversationId: resumed.id,
-      history: messages,
-    );
-
-    setState(() {
-      _conversation = resumed;
-      _messages
-        ..clear()
-        ..addAll(messages);
-    });
-
-    _scrollToBottom();
   }
 
   Future<void> _newChat() async {
-    if (_sending) {
+    if (_sending || _loadingConversation || _historyLoadError) {
       return;
     }
+    final ticket = _sessionController.captureTicket();
+    if (ticket == null) return;
 
     HapticFeedback.selectionClick();
 
@@ -478,22 +648,46 @@ class _AiChatPageState extends State<AiChatPage> {
       },
     );
 
-    if (confirm != true || !mounted) {
+    if (confirm != true ||
+        !mounted ||
+        !_sessionController.isCurrentTicket(ticket)) {
       return;
     }
 
     final String? currentId = _conversation?.id;
 
     if (currentId != null) {
-      await _historyService.archiveConversation(currentId);
+      try {
+        await _awaitStage(
+          _historyService.archiveConversation(currentId),
+          _conversationWriteTimeout,
+          'archivar_chat',
+        );
+      } catch (_) {
+        if (mounted) {
+          showAppStatusSnackBar(
+            context,
+            message: _spanish
+                ? 'No pude confirmar el nuevo chat. Revisa tu conexión e inténtalo nuevamente.'
+                : 'I could not confirm the new chat. Check your connection and retry.',
+            type: AppStatusType.error,
+          );
+        }
+        return;
+      }
     }
+
+    if (!mounted || !_sessionController.isCurrentTicket(ticket)) return;
 
     _aiService.iniciarNuevoChat();
 
     setState(() {
+      ++_requestGeneration;
       _conversation = null;
       _messages.clear();
       _messageController.clear();
+      _pendingSend = null;
+      _lastFailedMessage = null;
     });
 
     _focusNode.requestFocus();
@@ -504,121 +698,218 @@ class _AiChatPageState extends State<AiChatPage> {
     await _sendMessage();
   }
 
-  Future<void> _sendMessage({
-    String? retryText,
-    bool persistUserMessage = true,
-  }) async {
+  Future<void> _sendMessage({String? retryText}) async {
     final String text = (retryText ?? _messageController.text).trim();
 
-    if (text.isEmpty || _sending) {
+    if (text.isEmpty || _sending || _loadingConversation || _historyLoadError) {
       return;
     }
+    final sessionTicket = _sessionController.captureTicket();
+    if (sessionTicket == null) return;
+    final _AiPendingSend pending =
+        _pendingSend != null &&
+            _lastFailedMessage == text &&
+            (_conversation == null ||
+                _conversation!.id == _pendingSend!.conversationId)
+        ? _pendingSend!
+        : _AiPendingSend(
+            text: text,
+            conversationId: _conversation?.id ?? _newRequestId(),
+            userMessageId: _newRequestId(),
+            assistantMessageId: _newRequestId(),
+            errorMessageId: _newRequestId(),
+          );
+    _pendingSend = pending;
+    pending.attempts++;
+    final int generation = ++_requestGeneration;
+    String stage = 'crear_chat';
+
+    bool isCurrent() =>
+        mounted &&
+        generation == _requestGeneration &&
+        _sessionController.isCurrentTicket(sessionTicket) &&
+        (_conversation == null || _conversation!.id == pending.conversationId);
 
     HapticFeedback.selectionClick();
 
     setState(() {
-      if (retryText == null) _messageController.clear();
+      if (retryText == null || _messageController.text.trim() == text) {
+        _messageController.clear();
+      }
       _sending = true;
+      _lastFailedMessage = null;
     });
 
     try {
-      final AiConversation conversation = await _ensureConversation(text);
-
-      final AiChatMessage? userMessage = persistUserMessage
-          ? await _historyService.addMessage(
-              chatId: conversation.id,
-              role: AiChatRole.user,
-              text: text,
-            )
-          : null;
-
-      if (!mounted) {
-        return;
+      AiConversation? conversation = _conversation;
+      if (conversation == null) {
+        conversation = await _awaitStage(
+          _historyService.createConversation(
+            text,
+            conversationId: pending.conversationId,
+          ),
+          _conversationWriteTimeout,
+          'crear_chat',
+        );
+        if (!isCurrent()) return;
+        _aiService.iniciarConversacion(conversationId: conversation!.id);
+        setState(() => _conversation = conversation);
       }
 
-      if (userMessage != null) {
+      if (!_messages.any((message) => message.id == pending.userMessageId)) {
+        stage = 'guardar_pregunta';
+        final AiChatMessage userMessage = await _awaitStage(
+          _historyService.addMessage(
+            chatId: conversation.id,
+            role: AiChatRole.user,
+            text: text,
+            messageId: pending.userMessageId,
+          ),
+          _messageWriteTimeout,
+          'guardar_pregunta',
+        );
+        if (!isCurrent()) return;
         setState(() {
-          _messages.add(userMessage);
+          if (!_messages.any((message) => message.id == userMessage.id)) {
+            _messages.add(userMessage);
+          }
+          if (_messageController.text.trim() == text) {
+            _messageController.clear();
+          }
         });
       }
-
       _scrollToBottom();
 
-      final String response = await _aiService.enviarMensaje(text);
+      stage = 'consultar_asistente';
+      final String response =
+          pending.response ??
+          await _awaitStage(
+            _aiService.enviarMensaje(
+              text,
+              history: List<AiChatMessage>.of(_messages),
+            ),
+            _assistantTimeout,
+            'consultar_asistente',
+          );
+      if (!isCurrent()) return;
+      pending.response = response;
 
-      final AiChatMessage assistantMessage = await _historyService.addMessage(
-        chatId: conversation.id,
-        role: AiChatRole.assistant,
-        text: response,
+      stage = 'guardar_respuesta';
+      final AiChatMessage assistantMessage = await _awaitStage(
+        _historyService.addMessage(
+          chatId: conversation.id,
+          role: AiChatRole.assistant,
+          text: response,
+          messageId: pending.assistantMessageId,
+          clearErrorMessageId: pending.errorMessageId,
+        ),
+        _messageWriteTimeout,
+        'guardar_respuesta',
       );
-
-      if (!mounted) {
-        return;
-      }
+      if (!isCurrent()) return;
 
       setState(() {
-        _messages.add(assistantMessage);
+        if (!_messages.any((message) => message.id == assistantMessage.id)) {
+          _messages.add(assistantMessage);
+        }
+        _messages.removeWhere(
+          (message) => message.id == pending.errorMessageId,
+        );
+        if (_messageController.text.trim() == text) {
+          _messageController.clear();
+        }
         _lastFailedMessage = null;
+        _pendingSend = null;
       });
     } catch (error, stackTrace) {
-      debugPrint('EducFlow AI error: $error');
+      if (!isCurrent()) return;
+      final bool storageStage =
+          stage == 'crear_chat' ||
+          stage == 'guardar_pregunta' ||
+          stage == 'guardar_respuesta';
+      final diagnostics = AiFailureDiagnostics.from(
+        error,
+        chatStorage: storageStage,
+      );
+      assert(() {
+        debugPrint(
+          '[EducFlow AI][send_failed] ${{'request': pending.userMessageId.substring(0, 8), 'attempt': pending.attempts, 'stage': stage, ...diagnostics.toSafeLog()}}',
+        );
+        return true;
+      }());
 
       debugPrintStack(label: 'EducFlow AI stack trace', stackTrace: stackTrace);
 
-      if (!mounted) {
-        return;
-      }
-
       final bool timeout = error is AiRequestTimeoutException;
-      final String errorText = timeout
+      final int timeoutSeconds = error is AiRequestTimeoutException
+          ? error.timeout.inSeconds
+          : AiFunctionCallingFlow.defaultTimeout.inSeconds;
+      final bool storageTimeout =
+          timeout &&
+          (error.stage == 'crear_chat' ||
+              error.stage == 'guardar_pregunta' ||
+              error.stage == 'guardar_respuesta');
+      final String errorText = storageTimeout
           ? (_spanish
-                ? 'La consulta tardó más de ${AiFunctionCallingFlow.defaultTimeout.inSeconds} segundos. Puedes reintentarla sin perder tu mensaje.'
-                : 'The request took longer than ${AiFunctionCallingFlow.defaultTimeout.inSeconds} seconds. You can retry without losing your message.')
-          : (_spanish
-                ? 'No pude responder en este momento. Inténtalo nuevamente.'
-                : 'I could not respond right now. Please try again.');
+                ? 'No pude confirmar el mensaje con el servidor en $timeoutSeconds segundos. Revisa tu conexión y reinténtalo.'
+                : 'I could not confirm the message with the server within $timeoutSeconds seconds. Check your connection and retry.')
+          : timeout
+          ? (_spanish
+                ? 'La consulta tardó más de $timeoutSeconds segundos. Puedes reintentarla sin perder tu mensaje.'
+                : 'The request took longer than $timeoutSeconds seconds. You can retry without losing your message.')
+          : diagnostics.userMessage(spanish: _spanish);
 
       _lastFailedMessage = text;
+      if (!_messages.any((message) => message.id == pending.userMessageId) &&
+          _messageController.text.trim().isEmpty) {
+        _messageController.text = text;
+      }
 
       final AiConversation? conversation = _conversation;
 
       if (conversation != null) {
         try {
-          final AiChatMessage errorMessage = await _historyService.addMessage(
-            chatId: conversation.id,
-            role: AiChatRole.assistant,
-            text: errorText,
-            isError: true,
+          final AiChatMessage errorMessage = await _awaitStage(
+            _historyService.addMessage(
+              chatId: conversation.id,
+              role: AiChatRole.assistant,
+              text: errorText,
+              isError: true,
+              messageId: pending.errorMessageId,
+            ),
+            _errorWriteTimeout,
+            'guardar_error',
           );
 
-          if (mounted) {
+          if (isCurrent()) {
             setState(() {
-              _messages.add(errorMessage);
+              _upsertError(errorMessage);
             });
           }
         } catch (_) {
-          if (mounted) {
-            setState(() {
-              _messages.add(
-                AiChatMessage(
-                  id: 'local-error-${DateTime.now().microsecondsSinceEpoch}',
-                  role: AiChatRole.assistant,
-                  text: errorText,
-                  createdAt: DateTime.now(),
-                  isError: true,
-                ),
-              );
-            });
-          }
+          if (isCurrent()) _showLocalError(errorText, pending.errorMessageId);
         }
+      } else if (isCurrent()) {
+        _showLocalError(errorText, pending.errorMessageId);
       }
     } finally {
-      if (mounted) {
-        setState(() {
-          _sending = false;
-        });
+      if (mounted && generation == _requestGeneration) {
+        if (!_sessionController.isCurrentTicket(sessionTicket)) {
+          _aiService.iniciarNuevoChat();
+          setState(() {
+            _conversation = null;
+            _messages.clear();
+            _lastFailedMessage = null;
+            _pendingSend = null;
+            _sending = false;
+          });
+        } else {
+          setState(() {
+            _sending = false;
+          });
 
-        _scrollToBottom();
+          _scrollToBottom();
+        }
       }
     }
   }
@@ -626,7 +917,35 @@ class _AiChatPageState extends State<AiChatPage> {
   Future<void> _retryLastMessage() async {
     final text = _lastFailedMessage;
     if (text == null || text.isEmpty || _sending) return;
-    await _sendMessage(retryText: text, persistUserMessage: false);
+    await _sendMessage(retryText: text);
+  }
+
+  void _showLocalError(String text, String id) {
+    setState(() {
+      _upsertError(
+        AiChatMessage(
+          id: id,
+          role: AiChatRole.assistant,
+          text: text,
+          createdAt: DateTime.now(),
+          isError: true,
+        ),
+      );
+    });
+  }
+
+  void _upsertError(AiChatMessage error) {
+    final index = _messages.indexWhere((message) => message.id == error.id);
+    if (index >= 0) _messages.removeAt(index);
+    _messages.add(error);
+  }
+
+  String _newRequestId() {
+    final random = math.Random.secure();
+    return List.generate(
+      16,
+      (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0'),
+    ).join();
   }
 
   void _scrollToBottom() {
@@ -669,6 +988,26 @@ class _AiChatPageState extends State<AiChatPage> {
                             child: CircularProgressIndicator(
                               color: _primaryColor,
                               strokeWidth: 3,
+                            ),
+                          )
+                        : _historyLoadError
+                        ? Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  _spanish
+                                      ? 'No pude recuperar el chat. Revisa tu conexión.'
+                                      : 'I could not restore the chat. Check your connection.',
+                                ),
+                                TextButton(
+                                  key: const ValueKey('retry-ai-history'),
+                                  onPressed: _loadInitialConversation,
+                                  child: Text(
+                                    _spanish ? 'Reintentar' : 'Retry',
+                                  ),
+                                ),
+                              ],
                             ),
                           )
                         : _messages.isEmpty
@@ -1090,7 +1429,7 @@ class _AiChatPageState extends State<AiChatPage> {
 
           Expanded(
             child: message.isError
-                ? _buildErrorMessage(dark, message.text)
+                ? _buildErrorMessage(dark, message)
                 : _buildAiResponse(dark, message.text),
           ),
         ],
@@ -1203,7 +1542,7 @@ class _AiChatPageState extends State<AiChatPage> {
     );
   }
 
-  Widget _buildErrorMessage(bool dark, String text) {
+  Widget _buildErrorMessage(bool dark, AiChatMessage message) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -1217,14 +1556,15 @@ class _AiChatPageState extends State<AiChatPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            text,
+            message.text,
             style: TextStyle(
               color: dark ? const Color(0xFFF0C5C5) : const Color(0xFF991B1B),
               fontSize: 13.5,
               height: 1.45,
             ),
           ),
-          if (_lastFailedMessage != null) ...[
+          if (_lastFailedMessage != null &&
+              _pendingSend?.errorMessageId == message.id) ...[
             const SizedBox(height: 8),
             TextButton.icon(
               key: const ValueKey('retry-ai-message'),
@@ -1307,7 +1647,11 @@ class _AiChatPageState extends State<AiChatPage> {
   // =========================================================
 
   Widget _buildComposer(bool dark) {
-    final bool canSend = !_sending && _messageController.text.trim().isNotEmpty;
+    final bool canSend =
+        !_sending &&
+        !_loadingConversation &&
+        !_historyLoadError &&
+        _messageController.text.trim().isNotEmpty;
 
     return SafeArea(
       top: false,
@@ -1493,6 +1837,24 @@ class _ThinkingDotsState extends State<_ThinkingDots>
       },
     );
   }
+}
+
+class _AiPendingSend {
+  _AiPendingSend({
+    required this.text,
+    required this.conversationId,
+    required this.userMessageId,
+    required this.assistantMessageId,
+    required this.errorMessageId,
+  });
+
+  final String text;
+  final String conversationId;
+  final String userMessageId;
+  final String assistantMessageId;
+  final String errorMessageId;
+  String? response;
+  int attempts = 0;
 }
 
 class _TinyThinkingDots extends StatefulWidget {

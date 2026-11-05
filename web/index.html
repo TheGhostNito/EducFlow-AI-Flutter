@@ -57,6 +57,14 @@
 </head>
 <body>
   <div id="educflow-safe-area" aria-hidden="true"></div>
+  <script>
+    // Activación optativa para sesiones debug locales autorizadas en Firebase.
+    // Una compilación release servida en localhost conserva su proveedor normal.
+    const local = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+    if (local && new URLSearchParams(location.search).get('appCheckDebug') === '1') {
+      self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+    }
+  </script>
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader

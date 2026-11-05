@@ -79,14 +79,17 @@ class AiFunctionCallingFlow {
 
     Future<String> execute() async {
       _log('request_started', {'stage': stage});
+      final Stopwatch initialModelStopwatch = Stopwatch()..start();
       var response = await sendInitialMessage();
+      initialModelStopwatch.stop();
       _log('model_response_received', {
         'stage': stage,
+        'elapsedMs': initialModelStopwatch.elapsedMilliseconds,
         'functionCalls': response.functionCalls.length,
         'hasText': response.text?.trim().isNotEmpty == true,
       });
 
-      for (var round = 0; round < maxToolRounds; round++) {
+      for (var round = 0; round <= maxToolRounds; round++) {
         final calls = response.functionCalls;
         if (calls.isEmpty) {
           final text = response.text?.trim() ?? '';
@@ -100,6 +103,9 @@ class AiFunctionCallingFlow {
           });
           return text;
         }
+        if (round == maxToolRounds) {
+          throw AiToolRoundsExceededException(maxToolRounds);
+        }
 
         final toolResults = <AiToolCallResult>[];
         for (final call in calls) {
@@ -107,19 +113,23 @@ class AiFunctionCallingFlow {
           _log('function_call_received', {
             'round': round + 1,
             'name': call.name,
-            'arguments': call.arguments,
+            'argumentKeys': call.arguments.keys.toList(growable: false),
           });
 
           Map<String, Object?> result;
+          final Stopwatch toolStopwatch = Stopwatch()..start();
           try {
             result = await executeTool(call);
+            toolStopwatch.stop();
             _log('tool_completed', {
               'round': round + 1,
               'name': call.name,
+              'elapsedMs': toolStopwatch.elapsedMilliseconds,
               'success': result['exito'],
               'resultKeys': result.keys.toList(growable: false),
             });
           } catch (error) {
+            toolStopwatch.stop();
             result = const {
               'exito': false,
               'error': 'La herramienta no estuvo disponible. No inventes resultados.',
@@ -127,6 +137,7 @@ class AiFunctionCallingFlow {
             _log('tool_failed', {
               'round': round + 1,
               'name': call.name,
+              'elapsedMs': toolStopwatch.elapsedMilliseconds,
               'errorType': error.runtimeType.toString(),
             });
           }
@@ -141,16 +152,19 @@ class AiFunctionCallingFlow {
           'round': round + 1,
           'tools': toolResults.map((item) => item.name).toList(growable: false),
         });
+        final Stopwatch followUpModelStopwatch = Stopwatch()..start();
         response = await sendToolResults(toolResults);
+        followUpModelStopwatch.stop();
         _log('model_response_received', {
           'stage': stage,
           'round': round + 1,
+          'elapsedMs': followUpModelStopwatch.elapsedMilliseconds,
           'functionCalls': response.functionCalls.length,
           'hasText': response.text?.trim().isNotEmpty == true,
         });
       }
 
-      throw AiToolRoundsExceededException(maxToolRounds);
+      throw StateError('El flujo de herramientas terminó inesperadamente.');
     }
 
     Future<String> guardedExecution() async {
@@ -161,6 +175,7 @@ class AiFunctionCallingFlow {
             _log('request_timeout', {
               'stage': stage,
               'timeoutSeconds': timeout.inSeconds,
+              'elapsedMs': DateTime.now().difference(startedAt).inMilliseconds,
             });
             throw AiRequestTimeoutException(timeout: timeout, stage: stage);
           },
@@ -170,6 +185,7 @@ class AiFunctionCallingFlow {
       } catch (error) {
         _log('request_failed', {
           'stage': stage,
+          'elapsedMs': DateTime.now().difference(startedAt).inMilliseconds,
           'errorType': error.runtimeType.toString(),
         });
         rethrow;

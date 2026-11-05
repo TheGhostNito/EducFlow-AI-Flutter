@@ -349,7 +349,7 @@ class CalculoNotasService {
         evaluaciones.isNotEmpty &&
         evaluaciones.every((item) => item.notaReal != null);
     final EstadoAcademicoNota estadoAcademico = evaluadoConNotasReales
-        ? resultadoFinal! >= configuracion.notaAprobacion - tolerancia
+        ? esAprobatoria(resultadoFinal!, configuracion)
               ? EstadoAcademicoNota.aprobado
               : EstadoAcademicoNota.reprobado
         : pesoEvaluado <= tolerancia
@@ -537,7 +537,7 @@ class CalculoNotasService {
         evaluaciones.isNotEmpty &&
         evaluaciones.every((item) => item.notaReal != null);
     final EstadoAcademicoNota estadoAcademico = evaluadoConNotasReales
-        ? finalGrade >= configuracion.notaAprobacion - tolerancia
+        ? esAprobatoria(finalGrade, configuracion)
               ? EstadoAcademicoNota.aprobado
               : EstadoAcademicoNota.reprobado
         : presentacion.pesoEvaluado <= tolerancia && exam?.notaReal == null
@@ -590,5 +590,18 @@ class CalculoNotasService {
         (valor * factor + tolerancia).round() / factor,
       PoliticaRedondeoNotas.truncar => (valor * factor).truncate() / factor,
     };
+  }
+
+  /// Determina la aprobación con los mismos valores redondeados que ve el
+  /// usuario. La nota calculada conserva toda su precisión para ponderaciones,
+  /// metas y escenarios; solo la clasificación final aplica esta política.
+  bool esAprobatoria(double valor, ConfiguracionNotas configuracion) {
+    if (!valor.isFinite || !configuracion.esValida) return false;
+    final double notaVisible = redondear(valor, configuracion);
+    final double aprobacionVisible = redondear(
+      configuracion.notaAprobacion,
+      configuracion,
+    );
+    return notaVisible >= aprobacionVisible - tolerancia;
   }
 }

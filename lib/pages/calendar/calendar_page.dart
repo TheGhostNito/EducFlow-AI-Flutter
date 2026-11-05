@@ -21,6 +21,7 @@ import '../tasks/widgets/task_edit_sheet.dart';
 import 'widgets/calendar_add_sheet.dart';
 import '../tasks/widgets/task_detail_sheet.dart';
 import '../subjects/subject_detail_page.dart';
+import 'calendar_navigation.dart';
 import 'widgets/calendar_class_detail_sheet.dart';
 import 'widgets/evaluation_edit_sheet.dart';
 import 'widgets/evaluation_detail_sheet.dart';
@@ -228,7 +229,14 @@ class _CalendarPageState extends State<CalendarPage> {
     );
     _initialEvaluationHandled = true;
     if (evaluation == null) return;
-    setState(() => _fechaSeleccionada = evaluation.fecha);
+    setState(() {
+      _fechaSeleccionada = _normalizarFecha(evaluation.fecha);
+      _mesVisible = DateTime(
+        _fechaSeleccionada.year,
+        _fechaSeleccionada.month,
+        1,
+      );
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _abrirEvaluacionCalendario(evaluation);
     });
@@ -314,25 +322,20 @@ class _CalendarPageState extends State<CalendarPage> {
     });
   }
 
-  void _cambiarMes(int diferencia) {
+  void _navegarCalendario(int direccion) {
     HapticFeedback.selectionClick();
-
-    final DateTime nuevoMes = DateTime(
-      _mesVisible.year,
-      _mesVisible.month + diferencia,
-      1,
+    final CalendarNavigationResult result = navigateCalendar(
+      mode: _calendarioExpandido
+          ? CalendarViewMode.mes
+          : CalendarViewMode.semana,
+      selectedDate: _fechaSeleccionada,
+      visibleMonth: _mesVisible,
+      direction: direccion,
     );
 
-    final int ultimoDia = DateTime(nuevoMes.year, nuevoMes.month + 1, 0).day;
-
-    final int nuevoDia = _fechaSeleccionada.day > ultimoDia
-        ? ultimoDia
-        : _fechaSeleccionada.day;
-
     setState(() {
-      _mesVisible = nuevoMes;
-
-      _fechaSeleccionada = DateTime(nuevoMes.year, nuevoMes.month, nuevoDia);
+      _mesVisible = result.visibleMonth;
+      _fechaSeleccionada = result.selectedDate;
     });
   }
 
@@ -341,6 +344,11 @@ class _CalendarPageState extends State<CalendarPage> {
 
     setState(() {
       _calendarioExpandido = !_calendarioExpandido;
+      _mesVisible = DateTime(
+        _fechaSeleccionada.year,
+        _fechaSeleccionada.month,
+        1,
+      );
     });
   }
 
@@ -2169,7 +2177,7 @@ class _CalendarPageState extends State<CalendarPage> {
           oscuro: oscuro,
           icon: Icons.chevron_left_rounded,
           onTap: () {
-            _cambiarMes(-1);
+            _navegarCalendario(-1);
           },
         ),
 
@@ -2226,7 +2234,7 @@ class _CalendarPageState extends State<CalendarPage> {
           oscuro: oscuro,
           icon: Icons.chevron_right_rounded,
           onTap: () {
-            _cambiarMes(1);
+            _navegarCalendario(1);
           },
         ),
       ],
@@ -2429,7 +2437,7 @@ class _CalendarPageState extends State<CalendarPage> {
 
             Text(
               _calendarioExpandido
-                  ? (_espanol ? 'Mostrar solo semana' : 'Show week only')
+                  ? (_espanol ? 'Ver semana' : 'View week')
                   : (_espanol ? 'Ver mes completo' : 'View full month'),
               style: const TextStyle(
                 color: _primaryColor,
