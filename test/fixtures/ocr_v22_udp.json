@@ -1,0 +1,1107 @@
+{
+  "ok": true,
+  "extractionStatus": "courses_extracted",
+  "parsingMode": "layout_based",
+  "courseCount": 58,
+  "reviewCourseCount": 14,
+  "courseCreditsExpected": false,
+  "courses": [
+    {
+      "code": null,
+      "name": "Introducción al Álgebra",
+      "credits": null,
+      "confidence": 0.9766781,
+      "semester": 1,
+      "semesterColumnX": 57.66621,
+      "position": {
+        "centerX": 66.485752,
+        "centerY": 355.88236000000006
+      },
+      "sourceBlocks": [
+        43
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Introducción al Cálculo",
+      "credits": null,
+      "confidence": 0.96612567,
+      "semester": 1,
+      "semesterColumnX": 57.66621,
+      "position": {
+        "centerX": 63.77205000000001,
+        "centerY": 440.19608
+      },
+      "sourceBlocks": [
+        51,
+        52
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Química",
+      "credits": null,
+      "confidence": 0.9431024,
+      "semester": 1,
+      "semesterColumnX": 57.66621,
+      "position": {
+        "centerX": 54.9525115,
+        "centerY": 505.88235
+      },
+      "sourceBlocks": [
+        62
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Programación",
+      "credits": null,
+      "confidence": 0.9862876,
+      "semester": 1,
+      "semesterColumnX": 57.66621,
+      "position": {
+        "centerX": 65.807327,
+        "centerY": 579.411775
+      },
+      "sourceBlocks": [
+        69
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Introducción a la Ingeniería",
+      "credits": null,
+      "confidence": 0.9684862,
+      "semester": 1,
+      "semesterColumnX": 57.66621,
+      "position": {
+        "centerX": 64.78968499999999,
+        "centerY": 659.8039349999999
+      },
+      "sourceBlocks": [
+        72,
+        73
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Álgebra Lineal",
+      "credits": null,
+      "confidence": 0.9744233,
+      "semester": 2,
+      "semesterColumnX": 144.504755,
+      "position": {
+        "centerX": 137.042065,
+        "centerY": 355.88236000000006
+      },
+      "sourceBlocks": [
+        44
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Cálculo Diferencial e Integral",
+      "credits": null,
+      "confidence": 0.98157823,
+      "semester": 2,
+      "semesterColumnX": 144.504755,
+      "position": {
+        "centerX": 147.218455,
+        "centerY": 431.372555
+      },
+      "sourceBlocks": [
+        53
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Mecánica",
+      "credits": null,
+      "confidence": 0.9761711,
+      "semester": 2,
+      "semesterColumnX": 144.504755,
+      "position": {
+        "centerX": 142.46947,
+        "centerY": 499.01961000000006
+      },
+      "sourceBlocks": [
+        61
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Herramientas de Programación en Ingeniería Industrial",
+      "credits": null,
+      "confidence": 0.98336357,
+      "semester": 2,
+      "semesterColumnX": 144.504755,
+      "position": {
+        "centerX": 154.68114500000001,
+        "centerY": 579.4117799999999
+      },
+      "sourceBlocks": [
+        70
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Curso de Formación General",
+      "curricularSlotType": "elective_slot",
+      "credits": null,
+      "confidence": 0.9756517,
+      "semester": 2,
+      "semesterColumnX": 144.504755,
+      "position": {
+        "centerX": 144.504755,
+        "centerY": 653.92155
+      },
+      "sourceBlocks": [
+        80
+      ],
+      "quality": "review",
+      "needsReview": true,
+      "reviewReasons": [
+        "elective_slot"
+      ]
+    },
+    {
+      "code": null,
+      "name": "Ecuaciones Diferenciales",
+      "credits": null,
+      "confidence": 0.99335796,
+      "semester": 3,
+      "semesterColumnX": 231.343285,
+      "position": {
+        "centerX": 234.73540500000001,
+        "centerY": 356.862755
+      },
+      "sourceBlocks": [
+        45
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Cálculo en varias Variables",
+      "credits": null,
+      "confidence": 0.9846907,
+      "semester": 3,
+      "semesterColumnX": 231.343285,
+      "position": {
+        "centerX": 226.594295,
+        "centerY": 430.392165
+      },
+      "sourceBlocks": [
+        54
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Calor y Ondas",
+      "credits": null,
+      "confidence": 0.9636666,
+      "semester": 3,
+      "semesterColumnX": 231.343285,
+      "position": {
+        "centerX": 236.09227000000004,
+        "centerY": 501.960785
+      },
+      "sourceBlocks": [
+        63
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Introducción e la Economía",
+      "credits": null,
+      "confidence": 0.96633226,
+      "semester": 3,
+      "semesterColumnX": 231.343285,
+      "position": {
+        "centerX": 236.77069,
+        "centerY": 576.4706
+      },
+      "sourceBlocks": [
+        71
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Curso de Formación General",
+      "curricularSlotType": "elective_slot",
+      "credits": null,
+      "confidence": 0.98357075,
+      "semester": 3,
+      "semesterColumnX": 231.343285,
+      "position": {
+        "centerX": 228.62958,
+        "centerY": 653.92155
+      },
+      "sourceBlocks": [
+        81
+      ],
+      "quality": "review",
+      "needsReview": true,
+      "reviewReasons": [
+        "elective_slot"
+      ]
+    },
+    {
+      "code": null,
+      "name": "Probabilidades y Estadísticas",
+      "credits": null,
+      "confidence": 0.9857424,
+      "semester": 4,
+      "semesterColumnX": 318.18181000000004,
+      "position": {
+        "centerX": 320.89552000000003,
+        "centerY": 357.84314500000005
+      },
+      "sourceBlocks": [
+        46
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Electromagnetismo y Física Moderna",
+      "credits": null,
+      "confidence": 0.9835522,
+      "semester": 4,
+      "semesterColumnX": 318.18181000000004,
+      "position": {
+        "centerX": 312.75441,
+        "centerY": 436.27451
+      },
+      "sourceBlocks": [
+        55,
+        56
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Optimización",
+      "credits": null,
+      "confidence": 0.98302346,
+      "semester": 4,
+      "semesterColumnX": 318.18181000000004,
+      "position": {
+        "centerX": 317.50338999999997,
+        "centerY": 500.980395
+      },
+      "sourceBlocks": [
+        64
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Ingeniería Económica",
+      "credits": null,
+      "confidence": 0.9768839,
+      "semester": 4,
+      "semesterColumnX": 318.18181000000004,
+      "position": {
+        "centerX": 313.432835,
+        "centerY": 574.5098
+      },
+      "sourceBlocks": [
+        74
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Curso de Formación General",
+      "curricularSlotType": "elective_slot",
+      "credits": null,
+      "confidence": 0.98003453,
+      "semester": 4,
+      "semesterColumnX": 318.18181000000004,
+      "position": {
+        "centerX": 313.432835,
+        "centerY": 653.92155
+      },
+      "sourceBlocks": [
+        82
+      ],
+      "quality": "review",
+      "needsReview": true,
+      "reviewReasons": [
+        "elective_slot"
+      ]
+    },
+    {
+      "code": null,
+      "name": "Inglés General I",
+      "credits": null,
+      "confidence": 0.9730106,
+      "semester": 4,
+      "semesterColumnX": 318.18181000000004,
+      "position": {
+        "centerX": 308.683855,
+        "centerY": 730.3921700000001
+      },
+      "sourceBlocks": [
+        87
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Pasantía Laboral I",
+      "credits": null,
+      "confidence": 0.9699008,
+      "semester": 4,
+      "semesterColumnX": 318.18181000000004,
+      "position": {
+        "centerX": 347.35414000000003,
+        "centerY": 809.8039200000001
+      },
+      "sourceBlocks": [
+        91
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Inferencia Estadística",
+      "credits": null,
+      "confidence": 0.9848298,
+      "semester": 5,
+      "semesterColumnX": 404.341925,
+      "position": {
+        "centerX": 397.55766,
+        "centerY": 355.88236000000006
+      },
+      "sourceBlocks": [
+        47
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Mecánica de Fluidos",
+      "credits": null,
+      "confidence": 0.9831953,
+      "semester": 5,
+      "semesterColumnX": 404.341925,
+      "position": {
+        "centerX": 400.949785,
+        "centerY": 431.37255
+      },
+      "sourceBlocks": [
+        57
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Modelos Estocásticos",
+      "credits": null,
+      "confidence": 0.9740409,
+      "semester": 5,
+      "semesterColumnX": 404.341925,
+      "position": {
+        "centerX": 401.62822500000004,
+        "centerY": 504.90198
+      },
+      "sourceBlocks": [
+        65
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Microeconomía",
+      "credits": null,
+      "confidence": 0.9814831,
+      "semester": 5,
+      "semesterColumnX": 404.341925,
+      "position": {
+        "centerX": 405.698775,
+        "centerY": 579.4117749999999
+      },
+      "sourceBlocks": [
+        75
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Curso de Formación General",
+      "curricularSlotType": "elective_slot",
+      "credits": null,
+      "confidence": 0.98172635,
+      "semester": 5,
+      "semesterColumnX": 404.341925,
+      "position": {
+        "centerX": 395.52239,
+        "centerY": 653.92157
+      },
+      "sourceBlocks": [
+        83
+      ],
+      "quality": "review",
+      "needsReview": true,
+      "reviewReasons": [
+        "elective_slot"
+      ]
+    },
+    {
+      "code": null,
+      "name": "Inglés General II",
+      "credits": null,
+      "confidence": 0.9527619,
+      "semester": 5,
+      "semesterColumnX": 404.341925,
+      "position": {
+        "centerX": 393.48711000000003,
+        "centerY": 729.41175
+      },
+      "sourceBlocks": [
+        88
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Inferencia de Datos",
+      "credits": null,
+      "confidence": 0.9792134,
+      "semester": 6,
+      "semesterColumnX": 491.18046000000004,
+      "position": {
+        "centerX": 478.96878,
+        "centerY": 355.88236000000006
+      },
+      "sourceBlocks": [
+        48
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Termodinámica",
+      "credits": null,
+      "confidence": 0.9901494,
+      "semester": 6,
+      "semesterColumnX": 491.18046000000004,
+      "position": {
+        "centerX": 488.46675500000003,
+        "centerY": 428.43138
+      },
+      "sourceBlocks": [
+        58
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Producción",
+      "credits": null,
+      "confidence": 0.98523605,
+      "semester": 6,
+      "semesterColumnX": 491.18046000000004,
+      "position": {
+        "centerX": 481.6825,
+        "centerY": 500.000025
+      },
+      "sourceBlocks": [
+        66
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Finanzas",
+      "credits": null,
+      "confidence": 0.98085874,
+      "semester": 6,
+      "semesterColumnX": 491.18046000000004,
+      "position": {
+        "centerX": 476.255085,
+        "centerY": 575.490215
+      },
+      "sourceBlocks": [
+        76
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Curso de Formación General",
+      "curricularSlotType": "elective_slot",
+      "credits": null,
+      "confidence": 0.9814167,
+      "semester": 6,
+      "semesterColumnX": 491.18046000000004,
+      "position": {
+        "centerX": 478.29035,
+        "centerY": 653.92157
+      },
+      "sourceBlocks": [
+        84
+      ],
+      "quality": "review",
+      "needsReview": true,
+      "reviewReasons": [
+        "elective_slot"
+      ]
+    },
+    {
+      "code": null,
+      "name": "Inglés General III",
+      "credits": null,
+      "confidence": 0.9677907,
+      "semester": 6,
+      "semesterColumnX": 491.18046000000004,
+      "position": {
+        "centerX": 478.96878,
+        "centerY": 730.3921700000001
+      },
+      "sourceBlocks": [
+        89
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Ingeniería de Datos",
+      "credits": null,
+      "confidence": 0.9746808,
+      "semester": 7,
+      "semesterColumnX": 578.01898,
+      "position": {
+        "centerX": 563.0936199999999,
+        "centerY": 355.88236000000006
+      },
+      "sourceBlocks": [
+        49
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Gestión Energética",
+      "credits": null,
+      "confidence": 0.98302966,
+      "semester": 7,
+      "semesterColumnX": 578.01898,
+      "position": {
+        "centerX": 564.45047,
+        "centerY": 430.39216
+      },
+      "sourceBlocks": [
+        59
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Logística",
+      "credits": null,
+      "confidence": 0.97309536,
+      "semester": 7,
+      "semesterColumnX": 578.01898,
+      "position": {
+        "centerX": 560.37992,
+        "centerY": 501.960785
+      },
+      "sourceBlocks": [
+        67
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Simulación",
+      "credits": null,
+      "confidence": 0.98041797,
+      "semester": 7,
+      "semesterColumnX": 578.01898,
+      "position": {
+        "centerX": 565.80734,
+        "centerY": 573.5294349999999
+      },
+      "sourceBlocks": [
+        77
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Teoría Organizacional",
+      "credits": null,
+      "confidence": 0.9755536,
+      "semester": 7,
+      "semesterColumnX": 578.01898,
+      "position": {
+        "centerX": 563.7720549999999,
+        "centerY": 658.823535
+      },
+      "sourceBlocks": [
+        85,
+        86
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Curso de Formación General",
+      "curricularSlotType": "elective_slot",
+      "credits": null,
+      "confidence": 0.979833,
+      "semester": 7,
+      "semesterColumnX": 578.01898,
+      "position": {
+        "centerX": 562.41522,
+        "centerY": 728.43137
+      },
+      "sourceBlocks": [
+        94
+      ],
+      "quality": "review",
+      "needsReview": true,
+      "reviewReasons": [
+        "elective_slot"
+      ]
+    },
+    {
+      "code": null,
+      "name": "Data Science",
+      "credits": null,
+      "confidence": 0.98564965,
+      "semester": 8,
+      "semesterColumnX": 664.857535,
+      "position": {
+        "centerX": 656.03802,
+        "centerY": 353.92157999999995
+      },
+      "sourceBlocks": [
+        50
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Organización Industrial",
+      "credits": null,
+      "confidence": 0.98679763,
+      "semester": 8,
+      "semesterColumnX": 664.857535,
+      "position": {
+        "centerX": 654.681145,
+        "centerY": 428.431375
+      },
+      "sourceBlocks": [
+        60
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Gestión de Procesos",
+      "credits": null,
+      "confidence": 0.98196733,
+      "semester": 8,
+      "semesterColumnX": 664.857535,
+      "position": {
+        "centerX": 649.253725,
+        "centerY": 503.92159000000004
+      },
+      "sourceBlocks": [
+        68
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Evaluación de Proyectos",
+      "credits": null,
+      "confidence": 0.98541194,
+      "semester": 8,
+      "semesterColumnX": 664.857535,
+      "position": {
+        "centerX": 651.96744,
+        "centerY": 588.2352900000001
+      },
+      "sourceBlocks": [
+        78,
+        79
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Gestión Estratégica",
+      "credits": null,
+      "confidence": 0.98354053,
+      "semester": 8,
+      "semesterColumnX": 664.857535,
+      "position": {
+        "centerX": 647.5576725,
+        "centerY": 658.823535
+      },
+      "sourceBlocks": [
+        92,
+        93
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Gestión de Innovación",
+      "credits": null,
+      "confidence": 0.9740719,
+      "semester": 8,
+      "semesterColumnX": 664.857535,
+      "position": {
+        "centerX": 650.610595,
+        "centerY": 727.451
+      },
+      "sourceBlocks": [
+        95
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Pasantía Laboral II",
+      "credits": null,
+      "confidence": 0.9626897,
+      "semester": 8,
+      "semesterColumnX": 664.857535,
+      "position": {
+        "centerX": 692.672985,
+        "centerY": 810.7843
+      },
+      "sourceBlocks": [
+        102
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Electivo Profesional",
+      "curricularSlotType": "elective_slot",
+      "credits": null,
+      "confidence": 0.98280144,
+      "semester": 9,
+      "semesterColumnX": 751.6960750000001,
+      "position": {
+        "centerX": 752.0352674999999,
+        "centerY": 361.76471
+      },
+      "sourceBlocks": [
+        103,
+        104
+      ],
+      "quality": "review",
+      "needsReview": true,
+      "reviewReasons": [
+        "elective_slot"
+      ]
+    },
+    {
+      "code": null,
+      "name": "Electivo Profesional",
+      "curricularSlotType": "elective_slot",
+      "credits": null,
+      "confidence": 0.9917658,
+      "semester": 9,
+      "semesterColumnX": 751.6960750000001,
+      "position": {
+        "centerX": 755.7665999999999,
+        "centerY": 428.431375
+      },
+      "sourceBlocks": [
+        106
+      ],
+      "quality": "review",
+      "needsReview": true,
+      "reviewReasons": [
+        "elective_slot"
+      ]
+    },
+    {
+      "code": null,
+      "name": "Electivo Profesional",
+      "curricularSlotType": "elective_slot",
+      "credits": null,
+      "confidence": 0.99063414,
+      "semester": 9,
+      "semesterColumnX": 751.6960750000001,
+      "position": {
+        "centerX": 755.088185,
+        "centerY": 504.90198
+      },
+      "sourceBlocks": [
+        109
+      ],
+      "quality": "review",
+      "needsReview": true,
+      "reviewReasons": [
+        "elective_slot"
+      ]
+    },
+    {
+      "code": null,
+      "name": "Electivo Profesional",
+      "curricularSlotType": "elective_slot",
+      "credits": null,
+      "confidence": 0.99136853,
+      "semester": 9,
+      "semesterColumnX": 751.6960750000001,
+      "position": {
+        "centerX": 754.40975,
+        "centerY": 581.37257
+      },
+      "sourceBlocks": [
+        111
+      ],
+      "quality": "review",
+      "needsReview": true,
+      "reviewReasons": [
+        "elective_slot"
+      ]
+    },
+    {
+      "code": null,
+      "name": "Taller de Ingeniería I",
+      "credits": null,
+      "confidence": 0.95965576,
+      "semester": 9,
+      "semesterColumnX": 751.6960750000001,
+      "position": {
+        "centerX": 753.392125,
+        "centerY": 660.7843499999999
+      },
+      "sourceBlocks": [
+        113,
+        115
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Electivo Profesional",
+      "curricularSlotType": "elective_slot",
+      "credits": null,
+      "confidence": 0.9910271,
+      "semester": 10,
+      "semesterColumnX": 837.8561649999999,
+      "position": {
+        "centerX": 839.891465,
+        "centerY": 353.92157499999996
+      },
+      "sourceBlocks": [
+        105
+      ],
+      "quality": "review",
+      "needsReview": true,
+      "reviewReasons": [
+        "elective_slot"
+      ]
+    },
+    {
+      "code": null,
+      "name": "Electivo Profesional",
+      "curricularSlotType": "elective_slot",
+      "credits": null,
+      "confidence": 0.98579746,
+      "semester": 10,
+      "semesterColumnX": 837.8561649999999,
+      "position": {
+        "centerX": 836.1601224999999,
+        "centerY": 437.254905
+      },
+      "sourceBlocks": [
+        107,
+        108
+      ],
+      "quality": "review",
+      "needsReview": true,
+      "reviewReasons": [
+        "elective_slot"
+      ]
+    },
+    {
+      "code": null,
+      "name": "Electivo Profesional",
+      "curricularSlotType": "elective_slot",
+      "credits": null,
+      "confidence": 0.9905645,
+      "semester": 10,
+      "semesterColumnX": 837.8561649999999,
+      "position": {
+        "centerX": 838.53459,
+        "centerY": 504.90198
+      },
+      "sourceBlocks": [
+        110
+      ],
+      "quality": "review",
+      "needsReview": true,
+      "reviewReasons": [
+        "elective_slot"
+      ]
+    },
+    {
+      "code": null,
+      "name": "Electivo Profesional",
+      "curricularSlotType": "elective_slot",
+      "credits": null,
+      "confidence": 0.990068,
+      "semester": 10,
+      "semesterColumnX": 837.8561649999999,
+      "position": {
+        "centerX": 837.8561649999999,
+        "centerY": 581.37257
+      },
+      "sourceBlocks": [
+        112
+      ],
+      "quality": "review",
+      "needsReview": true,
+      "reviewReasons": [
+        "elective_slot"
+      ]
+    },
+    {
+      "code": null,
+      "name": "Taller de Ingeniería II",
+      "credits": null,
+      "confidence": 0.947981,
+      "semester": 10,
+      "semesterColumnX": 837.8561649999999,
+      "position": {
+        "centerX": 838.5346274999999,
+        "centerY": 660.7843499999999
+      },
+      "sourceBlocks": [
+        114,
+        116
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Actividad de Titulación Ingeniería Civil Industrial",
+      "credits": null,
+      "confidence": 0.9821789,
+      "semester": 11,
+      "semesterColumnX": 921.981,
+      "position": {
+        "centerX": 921.981,
+        "centerY": 503.921575
+      },
+      "sourceBlocks": [
+        119
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    }
+  ],
+  "specialCurricularElements": []
+}

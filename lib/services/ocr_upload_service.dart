@@ -1,6 +1,5 @@
-import 'dart:typed_data';
-
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class OcrUploadResult {
@@ -18,11 +17,9 @@ class OcrUploadResult {
 }
 
 class OcrUploadService {
-  OcrUploadService({
-    FirebaseAuth? firebaseAuth,
-    SupabaseClient? supabase,
-  })  : _firebaseAuth = firebaseAuth ?? FirebaseAuth.instance,
-        _supabase = supabase ?? Supabase.instance.client;
+  OcrUploadService({FirebaseAuth? firebaseAuth, SupabaseClient? supabase})
+    : _firebaseAuth = firebaseAuth ?? FirebaseAuth.instance,
+      _supabase = supabase ?? Supabase.instance.client;
 
   static const String bucketName = 'ocr-temp';
 
@@ -51,37 +48,29 @@ class OcrUploadService {
     }
 
     if (bytes.isEmpty) {
-      throw ArgumentError(
-        'El archivo OCR está vacío.',
-      );
+      throw ArgumentError('El archivo OCR está vacío.');
     }
 
     if (!allowedMimeTypes.contains(mimeType)) {
-      throw ArgumentError(
-        'Tipo de archivo no permitido para OCR: $mimeType',
-      );
+      throw ArgumentError('Tipo de archivo no permitido para OCR: $mimeType');
     }
 
     if (bytes.length > maxFileSizeBytes) {
-      throw ArgumentError(
-        'El archivo supera el límite máximo de 10 MB.',
-      );
+      throw ArgumentError('El archivo supera el límite máximo de 10 MB.');
     }
 
     final extension = _extensionForMimeType(mimeType);
 
-    final timestamp =
-        DateTime.now().toUtc().microsecondsSinceEpoch;
+    final timestamp = DateTime.now().toUtc().microsecondsSinceEpoch;
 
     final path = '${user.uid}/$timestamp.$extension';
 
-    await _supabase.storage.from(bucketName).uploadBinary(
+    await _supabase.storage
+        .from(bucketName)
+        .uploadBinary(
           path,
           bytes,
-          fileOptions: FileOptions(
-            contentType: mimeType,
-            upsert: false,
-          ),
+          fileOptions: FileOptions(contentType: mimeType, upsert: false),
         );
 
     return OcrUploadResult(
@@ -96,22 +85,25 @@ class OcrUploadService {
     final user = _firebaseAuth.currentUser;
 
     if (user == null) {
-      throw StateError(
-        'No hay un usuario autenticado.',
-      );
+      throw StateError('No hay un usuario autenticado.');
     }
 
-    final expectedPrefix = '${user.uid}/';
-
-    if (!path.startsWith(expectedPrefix)) {
-      throw StateError(
-        'El archivo OCR no pertenece al usuario actual.',
-      );
+    if (!pathBelongsToUser(path: path, uid: user.uid)) {
+      throw StateError('El archivo OCR no pertenece al usuario actual.');
     }
 
-    await _supabase.storage.from(bucketName).remove([
-      path,
-    ]);
+    await _supabase.storage.from(bucketName).remove([path]);
+  }
+
+  @visibleForTesting
+  static bool pathBelongsToUser({required String path, required String uid}) {
+    if (uid.isEmpty || path.isEmpty) return false;
+    final segments = path.split('/');
+    return segments.length == 2 &&
+        segments.first == uid &&
+        segments.last.isNotEmpty &&
+        segments.last != '.' &&
+        segments.last != '..';
   }
 
   String _extensionForMimeType(String mimeType) {
@@ -125,9 +117,7 @@ class OcrUploadService {
       case 'application/pdf':
         return 'pdf';
       default:
-        throw ArgumentError(
-          'No existe una extensión válida para $mimeType.',
-        );
+        throw ArgumentError('No existe una extensión válida para $mimeType.');
     }
   }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../models/tarea.dart';
+import '../../../services/study_plan_task_metadata.dart';
 
 enum TaskDetailAction { edit, delete }
 
@@ -65,7 +66,10 @@ class _TaskDetailSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final bool dark = Theme.of(context).brightness == Brightness.dark;
 
-    final String description = task.descripcion?.trim() ?? '';
+    final bool studySession = StudyPlanTaskMetadata.isStudySession(task);
+    final String description = StudyPlanTaskMetadata.visibleDescription(
+      task.descripcion,
+    );
 
     return Container(
       width: double.infinity,
@@ -111,8 +115,10 @@ class _TaskDetailSheet extends StatelessWidget {
                         : const Color(0xFFEEF0FF),
                     borderRadius: BorderRadius.circular(15),
                   ),
-                  child: const Icon(
-                    Icons.task_alt_rounded,
+                  child: Icon(
+                    studySession
+                        ? Icons.auto_stories_outlined
+                        : Icons.task_alt_rounded,
                     color: _primaryColor,
                     size: 24,
                   ),
@@ -125,7 +131,9 @@ class _TaskDetailSheet extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        spanish ? 'TAREA' : 'TASK',
+                        studySession
+                            ? (spanish ? 'SESIÓN DE ESTUDIO' : 'STUDY SESSION')
+                            : (spanish ? 'TAREA' : 'TASK'),
                         style: const TextStyle(
                           color: _primaryColor,
                           fontSize: 10.5,
@@ -258,7 +266,9 @@ class _TaskDetailSheet extends StatelessWidget {
                   _buildInfoRow(
                     dark: dark,
                     icon: Icons.calendar_today_outlined,
-                    label: spanish ? 'Entrega' : 'Due',
+                    label: studySession
+                        ? (spanish ? 'Sesión' : 'Session')
+                        : (spanish ? 'Entrega' : 'Due'),
                     value: dueText,
                   ),
 
@@ -281,8 +291,16 @@ class _TaskDetailSheet extends StatelessWidget {
                         : Icons.pending_actions_outlined,
                     label: spanish ? 'Estado' : 'Status',
                     value: task.completada
-                        ? (spanish ? 'Completada' : 'Completed')
-                        : (spanish ? 'Pendiente' : 'Pending'),
+                        ? (studySession
+                              ? (spanish
+                                    ? 'Sesión completada'
+                                    : 'Session completed')
+                              : (spanish ? 'Completada' : 'Completed'))
+                        : (studySession
+                              ? (spanish
+                                    ? 'Sesión programada'
+                                    : 'Session scheduled')
+                              : (spanish ? 'Pendiente' : 'Pending')),
                     valueColor: task.completada
                         ? const Color(0xFF059669)
                         : _primaryColor,

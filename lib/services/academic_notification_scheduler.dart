@@ -10,6 +10,7 @@ import '../models/tarea.dart';
 import 'asignaturas_service.dart';
 import 'evaluaciones_service.dart';
 import 'notification_service.dart';
+import 'study_plan_task_metadata.dart';
 import 'tareas_service.dart';
 import 'translation_service.dart';
 import 'user_preferences_service.dart';
@@ -412,6 +413,9 @@ class AcademicNotificationScheduler with WidgetsBindingObserver {
       }
 
       for (final Asignatura subject in asignaturas) {
+        // Se protege la agenda local de períodos históricos hasta que el
+        // programador reciba períodos y sesiones específicas como contexto.
+        if (subject.periodoAcademicoId?.trim().isNotEmpty == true) continue;
         for (
           int blockIndex = 0;
           blockIndex < subject.horario.length;
@@ -543,7 +547,11 @@ class AcademicNotificationScheduler with WidgetsBindingObserver {
       await _scheduleNotification(
         AcademicNotificationRequest(
           id: _stableNotificationId(key),
-          title: spanish ? 'Tarea para mañana' : 'Task due tomorrow',
+          title: StudyPlanTaskMetadata.isStudySession(task)
+              ? (spanish
+                    ? 'Sesión de estudio para mañana'
+                    : 'Study session tomorrow')
+              : (spanish ? 'Tarea para mañana' : 'Task due tomorrow'),
           body: body,
           dateTime: reminder,
           type: TipoNotificacionLocal.tarea,

@@ -1,33 +1,114 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../core/config/backend_config.dart';
 import '../models/malla_curricular.dart';
+import '../models/malla_import_review.dart';
+import '../models/malla_multimodal_review.dart';
+import 'malla_multimodal_review_service.dart';
+import 'malla_multimodal_persistence_service.dart';
+import 'malla_multimodal_testing_fixture.dart';
 import 'ocr_document_service.dart';
+import 'ocr_file_picker_service.dart';
 
 abstract interface class MallaCurricularGateway {
+  bool get multimodalPersistenceEnabled;
+  bool get multimodalTestingSampleEnabled;
   Future<bool> existe();
   Future<MallaCurricular?> cargar();
+  Future<MallaImportReview?> cargarRevisionMultimodal();
   Future<MallaCurricular> procesar(
     OcrDocumentResult upload, {
     required String fileName,
+    required OcrPickedFile originalFile,
   });
   Future<MallaCurricular> confirmar(MallaCurricular preview);
+  Future<MallaImportReview> confirmarMultimodal(MallaImportReview review);
+  Future<MallaImportReview> confirmarRelacionesAgrupadas({
+    required MallaImportReview review,
+    List<MallaPrerequisiteProposal> prerequisites = const [],
+    List<MallaCertificationBatchSelection> certifications = const [],
+  });
+  Future<MallaImportReview> decidirPrerrequisito({
+    required String mallaId,
+    required String courseId,
+    required String requiresCourseId,
+    required MallaProposalDecision decision,
+  });
+
+  Future<MallaImportReview> decidirMembresiaCertificacion({
+    required String mallaId,
+    required String certificationId,
+    required String courseId,
+    required MallaProposalDecision decision,
+  });
+  Future<MallaImportReview> decidirRequisitoAcademico({
+    required String mallaId,
+    required String requirementId,
+    required String type,
+    required MallaProposalDecision decision,
+  });
+  Future<MallaImportReview> confirmarRamoSinCodigo({
+    required String mallaId,
+    required String ramoId,
+  });
+  Future<MallaImportReview> editarRequisitoAcademico({
+    required String mallaId,
+    required MallaAcademicRequirement requirement,
+    required String description,
+    required int? minimumLevel,
+  });
+  Future<void> eliminarMallaConfirmada(String mallaId);
   Future<void> cambiarEstado(RamoMalla ramo, String estado);
   Future<MallaCurricular> editarRamo(
     MallaCurricular malla,
     RamoMalla ramo, {
     required bool confirmarRevision,
     required bool codigoDuplicadoVerificado,
+    required bool confirmarSinCodigo,
   });
 }
 
 class MallaCurricularService implements MallaCurricularGateway {
-  MallaCurricularService({FirebaseAuth? auth, SupabaseClient? client})
-    : _auth = auth ?? FirebaseAuth.instance,
-      _client = client ?? Supabase.instance.client;
+  MallaCurricularService({
+    FirebaseAuth? auth,
+    SupabaseClient? client,
+    MallaMultimodalReviewService? multimodalReviewService,
+    MallaMultimodalPersistenceRepository? multimodalPersistenceRepository,
+    MallaMultimodalTestingConfig? multimodalTestingConfig,
+    String? supabaseProjectRef,
+  }) : _auth = auth ?? FirebaseAuth.instance,
+       _client = client ?? Supabase.instance.client,
+       _multimodalReviewService =
+           multimodalReviewService ?? MallaMultimodalReviewService(),
+       _multimodalTestingConfig =
+           multimodalTestingConfig ?? MallaMultimodalTestingConfig.environment {
+    _multimodalPersistence =
+        multimodalPersistenceRepository ??
+        MallaMultimodalPersistenceRepository(
+          rpc: SupabaseMallaMultimodalRpcClient(_client),
+          uidProvider: () => _auth.currentUser?.uid,
+          firebaseProjectIdProvider: () => _auth.app.options.projectId,
+          supabaseProjectRef:
+              supabaseProjectRef ?? BackendConfig.supabaseProjectRef,
+        );
+  }
 
   final FirebaseAuth _auth;
   final SupabaseClient _client;
+  final MallaMultimodalReviewService _multimodalReviewService;
+  final MallaMultimodalTestingConfig _multimodalTestingConfig;
+  late final MallaMultimodalPersistenceRepository _multimodalPersistence;
+
+  @override
+  bool get multimodalPersistenceEnabled => _multimodalPersistence.enabled;
+
+  @override
+  bool get multimodalTestingSampleEnabled => _multimodalTestingConfig.allows(
+    firebaseProjectId: _auth.app.options.projectId,
+    supabaseProjectRef: BackendConfig.supabaseProjectRef,
+    persistenceEnabled: multimodalPersistenceEnabled,
+  );
 
   String get _uid {
     final uid = _auth.currentUser?.uid;
@@ -53,6 +134,9 @@ class MallaCurricularService implements MallaCurricularGateway {
 
   @override
   Future<MallaCurricular?> cargar() async {
+    if (multimodalPersistenceEnabled) {
+      return (await cargarRevisionMultimodal())?.malla;
+    }
     final uid = _uid;
     final row = await _client
         .from('mallas_curriculares')
@@ -83,9 +167,20 @@ class MallaCurricularService implements MallaCurricularGateway {
   }
 
   @override
+  Future<MallaImportReview?> cargarRevisionMultimodal() async {
+    try {
+      return await _multimodalPersistence.load();
+    } on PostgrestException catch (error) {
+      if (error.code == 'P0002') return null;
+      rethrow;
+    }
+  }
+
+  @override
   Future<MallaCurricular> procesar(
     OcrDocumentResult upload, {
     required String fileName,
+    required OcrPickedFile originalFile,
   }) async {
     final user = _auth.currentUser;
     if (user == null) throw StateError('Inicia sesión antes de procesar.');
@@ -105,7 +200,29 @@ class MallaCurricularService implements MallaCurricularGateway {
     if (_auth.currentUser?.uid != user.uid) {
       throw StateError('La sesión cambió durante el procesamiento.');
     }
-    return MallaOcrParser.parse(response.data, fileName: fileName);
+    final visionResult = MallaOcrParser.parse(
+      response.data,
+      fileName: fileName,
+    );
+    if (!multimodalPersistenceEnabled) {
+      return visionResult;
+    }
+    final visionPayload = response.data is Map
+        ? Map<String, dynamic>.from(response.data as Map)
+        : <String, dynamic>{};
+    final multimodalOutcome = await _multimodalReviewService.review(
+      uid: user.uid,
+      file: originalFile,
+      visionPayload: visionPayload,
+      visionResult: visionResult,
+    );
+    if (_auth.currentUser?.uid != user.uid) {
+      throw StateError('La sesión cambió durante el procesamiento.');
+    }
+    return visionResult.withMultimodalReview(
+      multimodalOutcome.review,
+      diagnostics: multimodalOutcome.diagnostics,
+    );
   }
 
   @override
@@ -142,6 +259,99 @@ class MallaCurricularService implements MallaCurricularGateway {
   }
 
   @override
+  Future<MallaImportReview> confirmarMultimodal(
+    MallaImportReview review,
+  ) async {
+    if (review.malla.ramos.isEmpty) {
+      throw const MallaMultimodalValidationException(
+        'La malla debe contener al menos una asignatura.',
+      );
+    }
+    final uid = _uid;
+    final saved = await _multimodalPersistence.confirm(review);
+    if (_auth.currentUser?.uid != uid) {
+      throw StateError('La sesión cambió durante el guardado.');
+    }
+    return saved;
+  }
+
+  @override
+  Future<MallaImportReview> confirmarRelacionesAgrupadas({
+    required MallaImportReview review,
+    List<MallaPrerequisiteProposal> prerequisites = const [],
+    List<MallaCertificationBatchSelection> certifications = const [],
+  }) => _multimodalPersistence.confirmRelationshipBatch(
+    review: review,
+    prerequisites: prerequisites,
+    certifications: certifications,
+  );
+
+  @override
+  Future<MallaImportReview> decidirPrerrequisito({
+    required String mallaId,
+    required String courseId,
+    required String requiresCourseId,
+    required MallaProposalDecision decision,
+  }) => _multimodalPersistence.decidePrerequisite(
+    mallaId: mallaId,
+    courseId: courseId,
+    requiresCourseId: requiresCourseId,
+    decision: decision,
+  );
+
+  @override
+  Future<MallaImportReview> decidirMembresiaCertificacion({
+    required String mallaId,
+    required String certificationId,
+    required String courseId,
+    required MallaProposalDecision decision,
+  }) => _multimodalPersistence.decideMembership(
+    mallaId: mallaId,
+    certificationId: certificationId,
+    courseId: courseId,
+    decision: decision,
+  );
+
+  @override
+  Future<MallaImportReview> decidirRequisitoAcademico({
+    required String mallaId,
+    required String requirementId,
+    required String type,
+    required MallaProposalDecision decision,
+  }) => _multimodalPersistence.decideAcademicRequirement(
+    mallaId: mallaId,
+    requirementId: requirementId,
+    type: type,
+    decision: decision,
+  );
+
+  @override
+  Future<MallaImportReview> confirmarRamoSinCodigo({
+    required String mallaId,
+    required String ramoId,
+  }) => _multimodalPersistence.confirmCourseWithoutCode(
+    mallaId: mallaId,
+    courseId: ramoId,
+  );
+
+  @override
+  Future<MallaImportReview> editarRequisitoAcademico({
+    required String mallaId,
+    required MallaAcademicRequirement requirement,
+    required String description,
+    required int? minimumLevel,
+  }) => _multimodalPersistence.updateAcademicRequirement(
+    mallaId: mallaId,
+    requirement: requirement,
+    description: description,
+    minimumLevel: minimumLevel,
+  );
+
+  @override
+  Future<void> eliminarMallaConfirmada(String mallaId) =>
+      _multimodalPersistence.deleteConfirmed(mallaId);
+
+  @override
   Future<void> cambiarEstado(RamoMalla ramo, String estado) async {
     if (!const {'pendiente', 'en_curso', 'aprobada'}.contains(estado)) {
       throw ArgumentError('Estado académico inválido.');
@@ -163,6 +373,7 @@ class MallaCurricularService implements MallaCurricularGateway {
     RamoMalla ramo, {
     required bool confirmarRevision,
     required bool codigoDuplicadoVerificado,
+    required bool confirmarSinCodigo,
   }) async {
     final uid = _uid;
     await _client.rpc(
@@ -181,6 +392,13 @@ class MallaCurricularService implements MallaCurricularGateway {
     );
     if (_auth.currentUser?.uid != uid) {
       throw StateError('La sesión cambió durante la edición.');
+    }
+    if (confirmarSinCodigo) {
+      final review = await confirmarRamoSinCodigo(
+        mallaId: malla.id,
+        ramoId: ramo.id,
+      );
+      return review.malla;
     }
     final updated = await cargar();
     if (updated == null) {

@@ -19,10 +19,7 @@ extension AiChatRoleFirestore on AiChatRole {
   }
 }
 
-DateTime _dateTimeFromFirestore(
-  dynamic value, {
-  DateTime? fallback,
-}) {
+DateTime _dateTimeFromFirestore(dynamic value, {DateTime? fallback}) {
   if (value is Timestamp) {
     return value.toDate();
   }
@@ -32,17 +29,13 @@ DateTime _dateTimeFromFirestore(
   }
 
   if (value is String) {
-    return DateTime.tryParse(value) ??
-        fallback ??
-        DateTime.now();
+    return DateTime.tryParse(value) ?? fallback ?? DateTime.now();
   }
 
   return fallback ?? DateTime.now();
 }
 
-DateTime? _dateTimeNullableFromFirestore(
-  dynamic value,
-) {
+DateTime? _dateTimeNullableFromFirestore(dynamic value) {
   if (value == null) {
     return null;
   }
@@ -99,13 +92,9 @@ class AiConversation {
       title: title ?? this.title,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
-      lastMessageAt:
-          lastMessageAt ?? this.lastMessageAt,
-      lastExitAt: clearLastExitAt
-          ? null
-          : lastExitAt ?? this.lastExitAt,
-      messageCount:
-          messageCount ?? this.messageCount,
+      lastMessageAt: lastMessageAt ?? this.lastMessageAt,
+      lastExitAt: clearLastExitAt ? null : lastExitAt ?? this.lastExitAt,
+      messageCount: messageCount ?? this.messageCount,
       archived: archived ?? this.archived,
     );
   }
@@ -116,45 +105,32 @@ class AiConversation {
   }) {
     final DateTime fallback = DateTime.now();
 
-    final String rawTitle =
-        data['titulo']?.toString().trim() ?? '';
+    final String rawTitle = data['titulo']?.toString().trim() ?? '';
 
-    final DateTime createdAt =
-        _dateTimeFromFirestore(
+    final DateTime createdAt = _dateTimeFromFirestore(
       data['creadoEn'],
       fallback: fallback,
     );
 
-    final DateTime updatedAt =
-        _dateTimeFromFirestore(
+    final DateTime updatedAt = _dateTimeFromFirestore(
       data['actualizadoEn'],
       fallback: createdAt,
     );
 
-    final DateTime lastMessageAt =
-        _dateTimeFromFirestore(
+    final DateTime lastMessageAt = _dateTimeFromFirestore(
       data['ultimoMensajeEn'],
       fallback: updatedAt,
     );
 
     return AiConversation(
       id: id,
-      title:
-          rawTitle.isNotEmpty ? rawTitle : 'Chat',
+      title: rawTitle.isNotEmpty ? rawTitle : 'Chat',
       createdAt: createdAt,
       updatedAt: updatedAt,
       lastMessageAt: lastMessageAt,
-      lastExitAt:
-          _dateTimeNullableFromFirestore(
-        data['ultimaSalidaEn'],
-      ),
-      messageCount:
-          (data['cantidadMensajes'] as num?)
-                  ?.toInt() ??
-              0,
-      archived: data['archivado'] is bool
-          ? data['archivado'] as bool
-          : false,
+      lastExitAt: _dateTimeNullableFromFirestore(data['ultimaSalidaEn']),
+      messageCount: (data['cantidadMensajes'] as num?)?.toInt() ?? 0,
+      archived: data['archivado'] is bool ? data['archivado'] as bool : false,
     );
   }
 }
@@ -176,21 +152,30 @@ class AiChatMessage {
 
   bool get isUser => role == AiChatRole.user;
 
+  AiChatMessage copyWith({
+    String? id,
+    AiChatRole? role,
+    String? text,
+    DateTime? createdAt,
+    bool? isError,
+  }) => AiChatMessage(
+    id: id ?? this.id,
+    role: role ?? this.role,
+    text: text ?? this.text,
+    createdAt: createdAt ?? this.createdAt,
+    isError: isError ?? this.isError,
+  );
+
   factory AiChatMessage.fromMap({
     required String id,
     required Map<String, dynamic> data,
   }) {
     return AiChatMessage(
       id: id,
-      role:
-          aiChatRoleFromFirestore(data['rol']),
+      role: aiChatRoleFromFirestore(data['rol']),
       text: data['texto']?.toString() ?? '',
-      createdAt: _dateTimeFromFirestore(
-        data['creadoEn'],
-      ),
-      isError: data['esError'] is bool
-          ? data['esError'] as bool
-          : false,
+      createdAt: _dateTimeFromFirestore(data['creadoEn']),
+      isError: data['esError'] is bool ? data['esError'] as bool : false,
     );
   }
 

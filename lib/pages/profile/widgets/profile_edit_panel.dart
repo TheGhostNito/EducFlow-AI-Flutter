@@ -697,8 +697,8 @@ class _ProfileEditPanelState extends State<ProfileEditPanel> {
 
               Text(
                 widget.spanish
-                    ? 'EduFlow AI adaptará tu experiencia según el nivel educativo que selecciones.'
-                    : 'EduFlow AI will adapt your experience based on the education level you select.',
+                    ? 'EducFlow AI adaptará tu experiencia según el nivel educativo que selecciones.'
+                    : 'EducFlow AI will adapt your experience based on the education level you select.',
                 style: TextStyle(
                   color: oscuro
                       ? const Color(0xFFA9B1BF)

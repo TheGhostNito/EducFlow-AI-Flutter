@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 
 class AppScrollHeader extends StatelessWidget {
@@ -99,14 +97,10 @@ class AppScrollHeader extends StatelessWidget {
         opacity: visualProgress,
         child: Transform.translate(
           offset: Offset(0, -18 * (1 - visualProgress)),
-          child: ClipRRect(
-            child: opaqueBackground
-                ? content
-                : BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-                    child: content,
-                  ),
-          ),
+          // El desenfoque nativo producía manchas de color con Impeller en
+          // Android al animar el encabezado sobre listas. El fondo ya tiene
+          // opacidad suficiente para conservar la separación visual.
+          child: content,
         ),
       ),
     );

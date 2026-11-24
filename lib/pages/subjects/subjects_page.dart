@@ -6,7 +6,9 @@ import '../../core/auth/auth_service.dart';
 import '../../models/asignatura.dart';
 import '../../models/perfil_usuario.dart';
 import '../../models/malla_entry_status.dart';
+import '../../models/horario_importacion.dart';
 import '../../services/asignaturas_service.dart';
+import '../../services/horario_importacion_service.dart';
 import '../../services/perfil_service.dart';
 import '../../services/translation_service.dart';
 import '../../services/malla_curricular_service.dart';
@@ -16,6 +18,8 @@ import '../../widgets/app_scroll_header.dart';
 import '../../widgets/app_status_snackbar.dart';
 import 'subject_detail_page.dart';
 import '../ocr/malla_curricular_page.dart';
+import '../schedule/horario_guardado_page.dart';
+import '../schedule/horario_import_page.dart';
 
 import '../../widgets/app_swipe_delete.dart';
 
@@ -44,6 +48,9 @@ class _SubjectsPageState extends State<SubjectsPage> {
 
   final TranslationService _translationService = TranslationService.instance;
 
+  final HorarioImportacionGateway _horarioImportacionService =
+      HorarioImportacionService();
+
   final ScrollController _scrollController = ScrollController();
 
   PerfilUsuario? _perfil;
@@ -53,6 +60,7 @@ class _SubjectsPageState extends State<SubjectsPage> {
   bool _cargando = true;
   bool _error = false;
   MallaEntryStatus _mallaEntryState = MallaEntryStatus.loading;
+  List<HorarioImportacionRegistro> _importacionesHorario = const [];
 
   double _progresoHeader = 0;
 
@@ -149,6 +157,9 @@ class _SubjectsPageState extends State<SubjectsPage> {
       final List<dynamic> resultados = await Future.wait([
         _perfilService.obtenerPerfil(usuario.uid),
         _asignaturasService.obtenerTodas(),
+        _horarioImportacionService.listar().catchError(
+          (_) => <HorarioImportacionRegistro>[],
+        ),
       ]);
 
       if (!mounted) {
@@ -158,6 +169,7 @@ class _SubjectsPageState extends State<SubjectsPage> {
       final PerfilUsuario? perfil = resultados[0] as PerfilUsuario?;
 
       final List<Asignatura> asignaturas = resultados[1] as List<Asignatura>;
+      final importaciones = resultados[2] as List<HorarioImportacionRegistro>;
 
       asignaturas.sort(
         (a, b) => a.nombre.toLowerCase().compareTo(b.nombre.toLowerCase()),
@@ -166,6 +178,7 @@ class _SubjectsPageState extends State<SubjectsPage> {
       setState(() {
         _perfil = perfil;
         _asignaturas = asignaturas;
+        _importacionesHorario = importaciones;
         _error = false;
       });
       if (_esSuperior) await _loadMallaEntry();
@@ -597,16 +610,35 @@ class _SubjectsPageState extends State<SubjectsPage> {
     await _loadMallaEntry();
   }
 
-  void _importarHorario() {
+  Future<void> _importarHorario() async {
     HapticFeedback.selectionClick();
 
-    showAppStatusSnackBar(
-      context,
-      message: _espanol
-          ? 'La importación de horario se conectará cuando migremos Gemini.'
-          : 'Schedule import will be connected when Gemini is migrated.',
-      type: AppStatusType.info,
+    if (_importacionesHorario.isEmpty &&
+        !HorarioImportacionConfig.writesEnabled) {
+      showAppStatusSnackBar(
+        context,
+        message: _espanol
+            ? 'La importación todavía no está habilitada para esta versión.'
+            : 'Schedule import is not enabled for this build yet.',
+        type: AppStatusType.info,
+      );
+      return;
+    }
+
+    await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => _importacionesHorario.isEmpty
+            ? HorarioImportPage(
+                spanish: _espanol,
+                importacionGateway: _horarioImportacionService,
+              )
+            : HorarioGuardadoPage(
+                spanish: _espanol,
+                importacionGateway: _horarioImportacionService,
+              ),
+      ),
     );
+    if (mounted) await _refrescar();
   }
 
   Future<void> _abrirDetalle(Asignatura asignatura) async {
@@ -968,14 +1000,20 @@ class _SubjectsPageState extends State<SubjectsPage> {
       _buildActionCard(
         oscuro: oscuro,
         icon: Ionicons.calendarOutline,
-        title: _espanol ? 'Importar horario' : 'Import schedule',
-        description: _espanol
-            ? (_esEscolar
-                  ? 'Carga una imagen de tu horario escolar para detectar tus asignaturas y bloques.'
-                  : 'Carga tu horario para detectar asignaturas y bloques automáticamente.')
-            : (_esEscolar
-                  ? 'Upload your school schedule to detect subjects and class blocks.'
-                  : 'Upload your schedule to detect subjects and class blocks automatically.'),
+        title: _importacionesHorario.isEmpty
+            ? (_espanol ? 'Importar horario' : 'Import schedule')
+            : (_espanol ? 'Ver horario' : 'View schedule'),
+        description: _importacionesHorario.isEmpty
+            ? (_espanol
+                  ? (_esEscolar
+                        ? 'Carga una imagen de tu horario escolar para detectar tus asignaturas y bloques.'
+                        : 'Carga tu horario para detectar asignaturas y bloques automáticamente.')
+                  : (_esEscolar
+                        ? 'Upload your school schedule to detect subjects and class blocks.'
+                        : 'Upload your schedule to detect subjects and class blocks automatically.'))
+            : (_espanol
+                  ? 'Consulta, descarga o elimina el horario confirmado.'
+                  : 'View, download, or delete the confirmed schedule.'),
         onTap: _importarHorario,
       ),
     ];

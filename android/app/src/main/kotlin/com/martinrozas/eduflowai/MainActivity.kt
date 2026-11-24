@@ -8,6 +8,7 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
 
     private val timeFormatChannel = "educflow/time_format"
+    private val environmentChannel = "educflow/environment"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -27,6 +28,16 @@ class MainActivity : FlutterActivity() {
                 else -> {
                     result.notImplemented()
                 }
+            }
+        }
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            environmentChannel
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "getApplicationId" -> result.success(applicationContext.packageName)
+                else -> result.notImplemented()
             }
         }
     }

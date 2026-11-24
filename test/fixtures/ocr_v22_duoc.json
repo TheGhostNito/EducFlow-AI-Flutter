@@ -1,0 +1,694 @@
+{
+  "ok": true,
+  "extractionStatus": "courses_extracted",
+  "parsingMode": "code_based",
+  "courseCount": 41,
+  "reviewCourseCount": 23,
+  "courseCreditsExpected": true,
+  "courses": [
+    {
+      "code": "PRY1111",
+      "name": "DISEÑO Y GESTIÓN DE REQUISITOS",
+      "credits": null,
+      "confidence": 0.9727248,
+      "position": {
+        "centerX": 287,
+        "centerY": 252
+      },
+      "semester": 1,
+      "semesterColumnX": 287.25,
+      "quality": "medium",
+      "needsReview": true,
+      "reviewReasons": [
+        "credits_missing"
+      ]
+    },
+    {
+      "code": "PRY2111",
+      "name": "DISEÑO DE PROTOTIPOS",
+      "credits": null,
+      "confidence": 0.9783622,
+      "position": {
+        "centerX": 438,
+        "centerY": 252
+      },
+      "semester": 2,
+      "semesterColumnX": 438,
+      "quality": "medium",
+      "needsReview": true,
+      "reviewReasons": [
+        "credits_missing"
+      ]
+    },
+    {
+      "code": "PRY3111",
+      "name": "INGENIERÍA DE SOFTWARE",
+      "credits": null,
+      "confidence": 0.9788033,
+      "position": {
+        "centerX": 591,
+        "centerY": 252
+      },
+      "semester": 3,
+      "semesterColumnX": 591.5,
+      "quality": "medium",
+      "needsReview": true,
+      "reviewReasons": [
+        "credits_missing"
+      ]
+    },
+    {
+      "code": "CSY4111",
+      "name": "CALIDAD DE SOFTWARE",
+      "credits": null,
+      "confidence": 0.86986655,
+      "position": {
+        "centerX": 769,
+        "centerY": 252
+      },
+      "semester": 4,
+      "semesterColumnX": 766.4285714285714,
+      "quality": "review",
+      "needsReview": true,
+      "reviewReasons": [
+        "credits_missing",
+        "low_ocr_confidence"
+      ]
+    },
+    {
+      "code": "GPY5111",
+      "name": "EVALUACIÓN DE PROYECTOS",
+      "credits": null,
+      "confidence": 0.95745504,
+      "position": {
+        "centerX": 918.5,
+        "centerY": 252
+      },
+      "semester": 5,
+      "semesterColumnX": 918.1,
+      "quality": "medium",
+      "needsReview": true,
+      "reviewReasons": [
+        "credits_missing"
+      ]
+    },
+    {
+      "code": "GPY6111",
+      "name": "GESTIÓN DE PROYECTOS INFORMÁTICOS",
+      "credits": 12,
+      "confidence": 0.9574034,
+      "position": {
+        "centerX": 1067.5,
+        "centerY": 258
+      },
+      "semester": 6,
+      "semesterColumnX": 1067.25,
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": "PGY1121",
+      "name": "PROGRAMACIÓN ALGORITMOS",
+      "credits": 10,
+      "confidence": 0.9827287,
+      "position": {
+        "centerX": 287.5,
+        "centerY": 369
+      },
+      "semester": 1,
+      "semesterColumnX": 287.25,
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": "PGY2121",
+      "name": "DESARROLLO SOFTWARE ESCRITORIO",
+      "credits": 10,
+      "confidence": 0.97469676,
+      "position": {
+        "centerX": 437.5,
+        "centerY": 369
+      },
+      "semester": 2,
+      "semesterColumnX": 438,
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": "PGY3121",
+      "name": "PROGRAMACIÓN WEB",
+      "credits": 12,
+      "confidence": 0.9745571,
+      "position": {
+        "centerX": 592,
+        "centerY": 368.5
+      },
+      "semester": 3,
+      "semesterColumnX": 591.5,
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": "PGY4121",
+      "name": "PROGRAMACIÓN APLICACIONES MÓVILES",
+      "credits": 10,
+      "confidence": 0.97502726,
+      "position": {
+        "centerX": 769,
+        "centerY": 361.5
+      },
+      "semester": 4,
+      "semesterColumnX": 766.4285714285714,
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": "BIY5121",
+      "name": "BPM",
+      "credits": null,
+      "confidence": 0.9437274,
+      "position": {
+        "centerX": 918,
+        "centerY": 362.5
+      },
+      "semester": 5,
+      "semesterColumnX": 918.1,
+      "quality": "medium",
+      "needsReview": true,
+      "reviewReasons": [
+        "credits_missing"
+      ]
+    },
+    {
+      "code": "MDY1131",
+      "name": "MODELAMIENTO BASE DE DATOS",
+      "credits": 10,
+      "confidence": 0.97545034,
+      "position": {
+        "centerX": 286.5,
+        "centerY": 481
+      },
+      "semester": 1,
+      "semesterColumnX": 287.25,
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": "MDY2131",
+      "name": "CONSULTA DE BASE DE DATOS",
+      "credits": 10,
+      "confidence": 0.97876215,
+      "position": {
+        "centerX": 438,
+        "centerY": 481
+      },
+      "semester": 2,
+      "semesterColumnX": 438,
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": "MAT1110",
+      "name": "NIVELACIÓN MATEMÁTICA",
+      "credits": 12,
+      "confidence": 0.9536681,
+      "position": {
+        "centerX": 287.5,
+        "centerY": 567.5
+      },
+      "semester": 1,
+      "semesterColumnX": 287.25,
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": "MAT2120",
+      "name": "MATEMÁTICA APLICADA",
+      "credits": null,
+      "confidence": 0.9782203,
+      "position": {
+        "centerX": 437.5,
+        "centerY": 561
+      },
+      "semester": 2,
+      "semesterColumnX": 438,
+      "quality": "medium",
+      "needsReview": true,
+      "reviewReasons": [
+        "credits_missing"
+      ]
+    },
+    {
+      "code": "MDY3131",
+      "name": "PROGRAMACIÓN DE BASE DE DATOS",
+      "credits": null,
+      "confidence": 0.9848899,
+      "position": {
+        "centerX": 591.5,
+        "centerY": 475
+      },
+      "semester": 3,
+      "semesterColumnX": 591.5,
+      "quality": "medium",
+      "needsReview": true,
+      "reviewReasons": [
+        "credits_missing"
+      ]
+    },
+    {
+      "code": "ASY4131",
+      "name": "ARQUITECTURA",
+      "credits": 10,
+      "confidence": 0.9671095,
+      "position": {
+        "centerX": 769.5,
+        "centerY": 481
+      },
+      "semester": 4,
+      "semesterColumnX": 766.4285714285714,
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": "PLC1101",
+      "name": "HABILIDADES BÁSICAS DE COMUNICACIÓN",
+      "credits": null,
+      "confidence": 0.9879764,
+      "position": {
+        "centerX": 287.5,
+        "centerY": 661
+      },
+      "semester": 1,
+      "semesterColumnX": 287.25,
+      "quality": "medium",
+      "needsReview": true,
+      "reviewReasons": [
+        "credits_missing"
+      ]
+    },
+    {
+      "code": "PLC2101",
+      "name": "HABILIDADES DE COMUNICACIÓN EFECTIVA",
+      "credits": 8,
+      "confidence": 0.98120135,
+      "position": {
+        "centerX": 438.5,
+        "centerY": 661
+      },
+      "semester": 2,
+      "semesterColumnX": 438,
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": "EMP1101",
+      "name": "MENTALIDAD EMPRENDEDORA",
+      "credits": 6,
+      "confidence": 0.9751975,
+      "position": {
+        "centerX": 592,
+        "centerY": 667.5
+      },
+      "semester": 3,
+      "semesterColumnX": 591.5,
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": "INU1101",
+      "name": "INGLÉS BÁSICO I",
+      "credits": null,
+      "confidence": 0.97673845,
+      "position": {
+        "centerX": 287.5,
+        "centerY": 789
+      },
+      "semester": 1,
+      "semesterColumnX": 287.25,
+      "quality": "medium",
+      "needsReview": true,
+      "reviewReasons": [
+        "credits_missing"
+      ]
+    },
+    {
+      "code": "INU2101",
+      "name": "INGLÉS BÁSICO II",
+      "credits": null,
+      "confidence": 0.9789751,
+      "position": {
+        "centerX": 438.5,
+        "centerY": 789
+      },
+      "semester": 2,
+      "semesterColumnX": 438,
+      "quality": "medium",
+      "needsReview": true,
+      "reviewReasons": [
+        "credits_missing"
+      ]
+    },
+    {
+      "code": "FCE1100",
+      "name": "FUNDAMENTOS DE ANTROPOLOGÍA",
+      "credits": null,
+      "confidence": 0.9837308,
+      "position": {
+        "centerX": 438,
+        "centerY": 865.5
+      },
+      "semester": 2,
+      "semesterColumnX": 438,
+      "quality": "medium",
+      "needsReview": true,
+      "reviewReasons": [
+        "credits_missing"
+      ]
+    },
+    {
+      "code": "ASY5131",
+      "name": "INTEGRACIÓN DE PLATAFORMAS",
+      "credits": null,
+      "confidence": 0.9427099,
+      "position": {
+        "centerX": 918,
+        "centerY": 474
+      },
+      "semester": 5,
+      "semesterColumnX": 918.1,
+      "quality": "medium",
+      "needsReview": true,
+      "reviewReasons": [
+        "credits_missing"
+      ]
+    },
+    {
+      "code": "INI3111",
+      "name": "INGLÉS ELEMENTAL",
+      "credits": 16,
+      "confidence": 0.9201835,
+      "position": {
+        "centerX": 591,
+        "centerY": 795.5
+      },
+      "semester": 3,
+      "semesterColumnX": 591.5,
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": "MAT4140",
+      "name": "ESTADÍSTICA DESCRIPTIVA",
+      "credits": null,
+      "confidence": 0.9695693,
+      "position": {
+        "centerX": 768.5,
+        "centerY": 561
+      },
+      "semester": 4,
+      "semesterColumnX": 766.4285714285714,
+      "quality": "medium",
+      "needsReview": true,
+      "reviewReasons": [
+        "credits_missing"
+      ]
+    },
+    {
+      "code": "PLY4614",
+      "name": "PRÁCTICA LABORAL",
+      "credits": 10,
+      "confidence": 0.98509526,
+      "position": {
+        "centerX": 918.5,
+        "centerY": 567.5
+      },
+      "semester": 5,
+      "semesterColumnX": 918.1,
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": "BIY6121",
+      "name": "INTELIGENCIA DE NEGOCIOS",
+      "credits": null,
+      "confidence": 0.8960026,
+      "position": {
+        "centerX": 1067.5,
+        "centerY": 362
+      },
+      "semester": 6,
+      "semesterColumnX": 1067.25,
+      "quality": "review",
+      "needsReview": true,
+      "reviewReasons": [
+        "credits_missing",
+        "low_ocr_confidence"
+      ]
+    },
+    {
+      "code": "GPY7111",
+      "name": "GESTIÓN DE RIESGOS",
+      "credits": 10,
+      "confidence": 0.96121186,
+      "position": {
+        "centerX": 1216,
+        "centerY": 258
+      },
+      "semester": 7,
+      "semesterColumnX": 1215.8333333333333,
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": "BIY7121",
+      "name": "MINERÍA DE DATOS",
+      "credits": null,
+      "confidence": 0.84391326,
+      "position": {
+        "centerX": 1215.5,
+        "centerY": 361.5
+      },
+      "semester": 7,
+      "semesterColumnX": 1215.8333333333333,
+      "quality": "review",
+      "needsReview": true,
+      "reviewReasons": [
+        "credits_missing",
+        "low_ocr_confidence"
+      ]
+    },
+    {
+      "code": "PTY4614",
+      "name": "CAPSTONE",
+      "credits": 20,
+      "confidence": 0.97037756,
+      "position": {
+        "centerX": 1365,
+        "centerY": 368.5
+      },
+      "semester": 8,
+      "semesterColumnX": 1365.25,
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": "ASY6131",
+      "name": "SEGURIDAD EN SISTEMAS COMPUTACIONALES",
+      "credits": null,
+      "confidence": 0.9484469,
+      "position": {
+        "centerX": 1067,
+        "centerY": 475
+      },
+      "semester": 6,
+      "semesterColumnX": 1067.25,
+      "quality": "medium",
+      "needsReview": true,
+      "reviewReasons": [
+        "credits_missing"
+      ]
+    },
+    {
+      "code": "BIY7131",
+      "name": "BIG DATA",
+      "credits": null,
+      "confidence": 0.8499281,
+      "position": {
+        "centerX": 1216,
+        "centerY": 475
+      },
+      "semester": 7,
+      "semesterColumnX": 1215.8333333333333,
+      "quality": "review",
+      "needsReview": true,
+      "reviewReasons": [
+        "credits_missing",
+        "low_ocr_confidence"
+      ]
+    },
+    {
+      "code": "EMP2103",
+      "name": "HERRAMIENTAS PARA EL EMPRENDIMIENTO",
+      "credits": 6,
+      "confidence": 0.9830372,
+      "position": {
+        "centerX": 1067.5,
+        "centerY": 667.5
+      },
+      "semester": 6,
+      "semesterColumnX": 1067.25,
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": "INI5111",
+      "name": "INGLÉS INTERMEDIO",
+      "credits": null,
+      "confidence": 0.9423368,
+      "position": {
+        "centerX": 768.5,
+        "centerY": 789.5
+      },
+      "semester": 4,
+      "semesterColumnX": 766.4285714285714,
+      "quality": "medium",
+      "needsReview": true,
+      "reviewReasons": [
+        "credits_missing"
+      ]
+    },
+    {
+      "code": "INI7111",
+      "name": "INGLÉS INTERMEDIO ALTO",
+      "credits": 16,
+      "confidence": 0.8849717,
+      "position": {
+        "centerX": 917.5,
+        "centerY": 795
+      },
+      "semester": 5,
+      "semesterColumnX": 918.1,
+      "quality": "review",
+      "needsReview": true,
+      "reviewReasons": [
+        "low_ocr_confidence"
+      ]
+    },
+    {
+      "code": "ESP1513",
+      "name": "INTEGRATED ENGLISH PRACTICE",
+      "credits": 8,
+      "confidence": 0.92777824,
+      "position": {
+        "centerX": 1067,
+        "centerY": 795.5
+      },
+      "semester": 6,
+      "semesterColumnX": 1067.25,
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": "EAY4470",
+      "name": "ÉTICA PARA EL TRABAJO",
+      "credits": null,
+      "confidence": 0.9683722,
+      "position": {
+        "centerX": 768.5,
+        "centerY": 866
+      },
+      "semester": 4,
+      "semesterColumnX": 766.4285714285714,
+      "quality": "medium",
+      "needsReview": true,
+      "reviewReasons": [
+        "credits_missing"
+      ]
+    },
+    {
+      "code": "APY4614",
+      "name": "PROCESO DE PORTAFOLIO",
+      "credits": null,
+      "confidence": 0.95759386,
+      "position": {
+        "centerX": 752,
+        "centerY": 961.5
+      },
+      "semester": 4,
+      "semesterColumnX": 766.4285714285714,
+      "quality": "medium",
+      "needsReview": true,
+      "reviewReasons": [
+        "credits_missing"
+      ]
+    },
+    {
+      "code": "EAY4615",
+      "name": "ÉTICA PROFESIONAL",
+      "credits": null,
+      "confidence": 0.978012,
+      "position": {
+        "centerX": 1067,
+        "centerY": 866
+      },
+      "semester": 6,
+      "semesterColumnX": 1067.25,
+      "quality": "medium",
+      "needsReview": true,
+      "reviewReasons": [
+        "credits_missing"
+      ]
+    },
+    {
+      "code": "PPY4614",
+      "name": "PRÁCTICA PROFESIONAL",
+      "credits": 20,
+      "confidence": 0.9585917,
+      "position": {
+        "centerX": 1365.5,
+        "centerY": 560.5
+      },
+      "semester": 8,
+      "semesterColumnX": 1365.25,
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    }
+  ],
+  "specialCurricularElements": [
+    {
+      "kind": "uncoded_course",
+      "name": "CURSO DE FORMACIÓN CRISTIANA",
+      "code": null,
+      "credits": 4,
+      "semester": 3,
+      "semesterColumnX": 591.5,
+      "position": {
+        "centerX": 591.5,
+        "centerY": 859.5
+      },
+      "quality": "review",
+      "needsReview": true,
+      "reviewReasons": [
+        "code_missing"
+      ]
+    }
+  ]
+}

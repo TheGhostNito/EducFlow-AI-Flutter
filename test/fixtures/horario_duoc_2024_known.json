@@ -1,0 +1,29 @@
+{
+  "period": {
+    "year": 2024,
+    "semester": 1,
+    "startDate": "",
+    "endDate": "",
+    "evidence": ["Primer semestre 2024"],
+    "pendingReasons": ["period_boundaries_not_provided_in_reference"]
+  },
+  "subjects": [
+    {
+      "subjectKey": "subject_portafolio_3",
+      "name": "Proceso de Portafolio 3",
+      "code": "",
+      "section": "",
+      "sourcePages": [1, 2],
+      "evidence": ["Proceso de Portafolio 3 y cuatro fechas específicas"],
+      "pendingReasons": ["code_and_section_require_source_document"],
+      "weeklyBlocks": [],
+      "datedSessions": [
+        {"subjectKey":"subject_portafolio_3","date":"2024-03-25","startTime":"","endTime":"","room":"","page":1,"evidence":["25 de marzo"],"pendingReasons":["time_and_room_require_source_document"]},
+        {"subjectKey":"subject_portafolio_3","date":"2024-04-22","startTime":"","endTime":"","room":"","page":1,"evidence":["22 de abril"],"pendingReasons":["time_and_room_require_source_document"]},
+        {"subjectKey":"subject_portafolio_3","date":"2024-05-20","startTime":"","endTime":"","room":"","page":2,"evidence":["20 de mayo"],"pendingReasons":["time_and_room_require_source_document"]},
+        {"subjectKey":"subject_portafolio_3","date":"2024-06-17","startTime":"","endTime":"","room":"","page":2,"evidence":["17 de junio"],"pendingReasons":["time_and_room_require_source_document"]}
+      ]
+    }
+  ],
+  "pendingReview": ["Completar la aceptación con los dos PDF originales"]
+}

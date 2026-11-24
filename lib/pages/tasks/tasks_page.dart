@@ -6,6 +6,7 @@ import '../../models/asignatura.dart';
 import '../../models/tarea.dart';
 import '../../services/asignaturas_service.dart';
 import '../../services/tareas_service.dart';
+import '../../services/study_plan_task_metadata.dart';
 import '../../services/time_format_service.dart';
 import '../../services/translation_service.dart';
 import '../../widgets/app_pressable.dart';
@@ -644,6 +645,9 @@ class _TasksPageState extends State<TasksPage> {
   }
 
   Color _colorFechaTarea(Tarea tarea) {
+    if (StudyPlanTaskMetadata.isStudySession(tarea)) {
+      return tarea.completada ? const Color(0xFF059669) : _primaryColor;
+    }
     if (_tareaVencida(tarea)) {
       return const Color(0xFFEF4444);
     }
@@ -665,6 +669,32 @@ class _TasksPageState extends State<TasksPage> {
     final DateTime hoyLimpio = DateTime(hoy.year, hoy.month, hoy.day);
 
     final int diferencia = fechaLimpia.difference(hoyLimpio).inDays;
+
+    if (StudyPlanTaskMetadata.isStudySession(tarea)) {
+      String label;
+      if (tarea.completada) {
+        label = _espanol ? 'Sesión completada' : 'Session completed';
+      } else if (diferencia == 0) {
+        label = _espanol ? 'Sesión de hoy' : 'Today\'s session';
+      } else if (diferencia == 1) {
+        label = _espanol
+            ? 'Sesión programada · Mañana'
+            : 'Scheduled session · Tomorrow';
+      } else {
+        final date = _espanol
+            ? '${fecha.day.toString().padLeft(2, '0')}/'
+                  '${fecha.month.toString().padLeft(2, '0')}/${fecha.year}'
+            : '${fecha.month.toString().padLeft(2, '0')}/'
+                  '${fecha.day.toString().padLeft(2, '0')}/${fecha.year}';
+        label = _espanol
+            ? 'Sesión programada · $date'
+            : 'Scheduled session · $date';
+      }
+      final time = tarea.horaEntrega?.trim() ?? '';
+      return time.isEmpty
+          ? label
+          : '$label · ${_timeFormatService.formatStoredTime(context, time)}';
+    }
 
     final bool vencida = _tareaVencida(tarea);
 

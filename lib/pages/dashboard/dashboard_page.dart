@@ -7,6 +7,8 @@ import '../../core/auth/auth_service.dart';
 import '../../models/asignatura.dart';
 import '../../models/evaluacion.dart';
 import '../../models/perfil_usuario.dart';
+import '../../models/periodo_academico.dart';
+import '../../models/sesion_clase.dart';
 import '../../models/tarea.dart';
 import '../../services/academic_home_priority_service.dart';
 import '../../services/asignaturas_service.dart';
@@ -14,11 +16,12 @@ import '../../services/beta_notice_service.dart';
 import '../../services/evaluaciones_service.dart';
 import '../../services/home_preferences_service.dart';
 import '../../services/home_class_status_service.dart';
+import '../../services/malla_curricular_service.dart';
 import '../../services/perfil_service.dart';
+import '../../services/periodos_academicos_service.dart';
+import '../../services/sesiones_clase_service.dart';
 import '../../services/tareas_service.dart';
 import '../../services/translation_service.dart';
-import '../../widgets/main_bottom_nav.dart';
-import '../../widgets/main_section_scroll.dart';
 import '../../widgets/app_reveal.dart';
 import '../../widgets/app_scroll_header.dart';
 import '../../widgets/app_status_snackbar.dart';
@@ -26,9 +29,14 @@ import '../profile/profile_page.dart';
 import '../settings/settings_page.dart';
 import '../settings/home_customization_page.dart';
 import '../grades/grades_page.dart';
+import '../ocr/malla_curricular_page.dart';
 import '../subjects/subjects_page.dart';
 import '../../services/time_format_service.dart';
 import '../tasks/tasks_page.dart';
+import '../tasks/widgets/task_detail_sheet.dart';
+import '../tasks/widgets/task_edit_sheet.dart';
+import '../calendar/widgets/evaluation_detail_sheet.dart';
+import '../calendar/widgets/evaluation_edit_sheet.dart';
 import 'widgets/home_content_sections.dart';
 
 import 'package:flutter/services.dart';
@@ -45,6 +53,7 @@ class DashboardPage extends StatefulWidget {
     this.betaNoticeService,
     this.betaDialogPresenter,
     this.initialLoadOverride,
+    this.mallaCurricularService,
   });
 
   final PerfilService? perfilService;
@@ -52,6 +61,7 @@ class DashboardPage extends StatefulWidget {
   final BetaNoticeCoordinator? betaNoticeService;
   final BetaNoticeDialogPresenter? betaDialogPresenter;
   final Future<void> Function()? initialLoadOverride;
+  final MallaCurricularGateway? mallaCurricularService;
 
   @override
   State<DashboardPage> createState() => _DashboardPageState();
@@ -63,8 +73,14 @@ class _DashboardPageState extends State<DashboardPage>
 
   PerfilService? _perfilService;
   late final SessionController _sessionController;
+  late final MallaCurricularGateway _mallaCurricularService;
 
   final AsignaturasService _asignaturasService = AsignaturasService.instance;
+
+  final PeriodosAcademicosService _periodosService =
+      PeriodosAcademicosService();
+
+  final SesionesClaseService _sesionesService = SesionesClaseService();
 
   final TareasService _tareasService = TareasService.instance;
 
@@ -92,6 +108,8 @@ class _DashboardPageState extends State<DashboardPage>
   PerfilUsuario? _perfil;
 
   List<Asignatura> _asignaturas = [];
+  List<PeriodoAcademico> _periodos = [];
+  List<SesionClase> _sesiones = [];
   List<HomeClassEntry> _clasesHoy = [];
   List<Tarea> _tareas = [];
   List<Evaluacion> _evaluaciones = [];
@@ -124,6 +142,9 @@ class _DashboardPageState extends State<DashboardPage>
   );
 
   bool get _espanol => _translationService.isSpanish;
+
+  bool get _testingMallaEnabled =>
+      _mallaCurricularService.multimodalTestingSampleEnabled;
 
   // =========================================================
   // DATOS DERIVADOS
@@ -245,7 +266,7 @@ class _DashboardPageState extends State<DashboardPage>
   String get _descripcionConfigurarHorario {
     if (_espanol) {
       if (_esNivelEscolar) {
-        return 'Agrega los días y horas de tus clases para que EduFlow AI pueda organizar tu semana escolar y mostrarte qué tienes hoy.';
+        return 'Agrega los días y horas de tus clases para que EducFlow AI pueda organizar tu semana escolar y mostrarte qué tienes hoy.';
       }
 
       if (_esNivelSuperior) {
@@ -256,7 +277,7 @@ class _DashboardPageState extends State<DashboardPage>
     }
 
     if (_esNivelEscolar) {
-      return 'Add the days and times of your classes so EduFlow AI can organize your school week and show what you have today.';
+      return 'Add the days and times of your classes so EducFlow AI can organize your school week and show what you have today.';
     }
 
     if (_esNivelSuperior) {
@@ -284,6 +305,8 @@ class _DashboardPageState extends State<DashboardPage>
     _perfilService = widget.perfilService;
     _sessionController = widget.sessionController ?? SessionController.instance;
     _betaNoticeService = widget.betaNoticeService ?? BetaNoticeService.instance;
+    _mallaCurricularService =
+        widget.mallaCurricularService ?? MallaCurricularService();
 
     WidgetsBinding.instance.addObserver(this);
 
@@ -574,6 +597,23 @@ class _DashboardPageState extends State<DashboardPage>
       final List<Asignatura> asignaturas = results[0] as List<Asignatura>;
       final List<Tarea> tareas = results[1] as List<Tarea>;
       final List<Evaluacion> evaluaciones = results[2] as List<Evaluacion>;
+      final bool requiereDatosAcademicos = asignaturas.any(
+        (asignatura) =>
+            asignatura.periodoAcademicoId?.trim().isNotEmpty == true,
+      );
+      final List<PeriodoAcademico> periodos;
+      final List<SesionClase> sesiones;
+      if (requiereDatosAcademicos) {
+        final complementos = await Future.wait([
+          _periodosService.obtenerTodos(),
+          _sesionesService.obtenerTodas(),
+        ]);
+        periodos = complementos[0] as List<PeriodoAcademico>;
+        sesiones = complementos[1] as List<SesionClase>;
+      } else {
+        periodos = const [];
+        sesiones = const [];
+      }
 
       if (!mounted) {
         return;
@@ -581,6 +621,8 @@ class _DashboardPageState extends State<DashboardPage>
 
       setState(() {
         _asignaturas = asignaturas;
+        _periodos = periodos;
+        _sesiones = sesiones;
         _tareas = tareas;
         _evaluaciones = evaluaciones;
 
@@ -602,6 +644,8 @@ class _DashboardPageState extends State<DashboardPage>
       if (!silencioso) {
         setState(() {
           _asignaturas = [];
+          _periodos = [];
+          _sesiones = [];
           _clasesHoy = [];
           _tareas = [];
           _evaluaciones = [];
@@ -651,6 +695,8 @@ class _DashboardPageState extends State<DashboardPage>
       date: DateTime.now(),
       missingRoomLabel: _espanol ? 'Sin sala' : 'No room',
       missingTeacherLabel: _espanol ? 'Sin profesor' : 'No teacher',
+      periodos: _periodos,
+      sesiones: _sesiones,
     );
   }
 
@@ -722,6 +768,15 @@ class _DashboardPageState extends State<DashboardPage>
     await _cargarContenido(forzar: true, silencioso: true);
   }
 
+  Future<void> _abrirMallaTesting() async {
+    if (!_testingMallaEnabled) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => MallaCurricularPage(service: _mallaCurricularService),
+      ),
+    );
+  }
+
   Future<void> _abrirTareas() async {
     await Navigator.of(context)
         .push(MaterialPageRoute(builder: (_) => const TasksPage()));
@@ -743,11 +798,52 @@ class _DashboardPageState extends State<DashboardPage>
   }
 
   Future<void> _abrirTareaEspecifica(Tarea tarea) async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => TasksPage(initialTaskId: tarea.id)),
+    HapticFeedback.selectionClick();
+    final action = await showTaskDetailSheet(
+      context: context,
+      task: tarea,
+      subjectName: _nombreAsignaturaPorId(
+        tarea.asignaturaId,
+        generalTaskIfEmpty: true,
+      ),
+      dueText: tarea.fechaEntrega == null
+          ? (_espanol ? 'Sin fecha' : 'No due date')
+          : _taskDateText(tarea),
+      priorityText: _taskPriorityText(tarea.prioridad),
+      spanish: _espanol,
     );
-    if (!mounted) return;
-    await _cargarContenido(forzar: true, silencioso: true);
+    if (!mounted || action == null) return;
+    if (action == TaskDetailAction.edit) {
+      final result = await showTaskEditSheet(
+        context: context,
+        subjects: _asignaturas,
+        spanish: _espanol,
+        task: tarea,
+      );
+      if (!mounted || result == null) return;
+      await _runHomeAction(
+        () => _tareasService.actualizar(
+          tarea.copyWith(
+            titulo: result.title,
+            descripcion: result.description,
+            limpiarDescripcion: result.description == null,
+            asignaturaId: result.subjectId,
+            limpiarAsignatura: result.subjectId == null,
+            prioridad: result.priority,
+            fechaEntrega: result.dueDate,
+            limpiarFechaEntrega: result.dueDate == null,
+            horaEntrega: result.dueTime,
+            limpiarHoraEntrega: result.dueTime == null,
+          ),
+        ),
+        _espanol ? 'Tarea actualizada.' : 'Task updated.',
+      );
+    } else if (await _confirmDelete(tarea.titulo)) {
+      await _runHomeAction(
+        () => _tareasService.eliminar(tarea.id),
+        _espanol ? 'Tarea eliminada.' : 'Task deleted.',
+      );
+    }
   }
 
   Future<void> _abrirPersonalizarInicio() async {
@@ -759,31 +855,105 @@ class _DashboardPageState extends State<DashboardPage>
     MainNavigation.goTo(context, SeccionPrincipal.horario);
   }
 
-  void _volverArriba() {
-    scrollMainSectionToTop(context, _scrollController);
-  }
-
-  void _abrirCalendario() {
-    MainNavigation.goTo(context, SeccionPrincipal.calendario);
-  }
-
-  void _abrirEvaluacionEspecifica(Evaluacion evaluacion) {
-    MainNavigation.openEvaluation(context, evaluacion.id);
-  }
-
-  void _abrirNotificaciones() {
+  Future<void> _abrirEvaluacionEspecifica(Evaluacion evaluacion) async {
     HapticFeedback.selectionClick();
-    MainNavigation.goTo(context, SeccionPrincipal.notificaciones);
+    final action = await showEvaluationDetailSheet(
+      context: context,
+      evaluation: evaluacion,
+      subjectName: _nombreAsignaturaPorId(evaluacion.asignaturaId),
+      typeName: _evaluationTypeName(evaluacion.tipo),
+      spanish: _espanol,
+    );
+    if (!mounted || action == null) return;
+    if (action == EvaluationDetailAction.edit) {
+      final result = await showEvaluationEditSheet(
+        context: context,
+        subjects: _asignaturas,
+        spanish: _espanol,
+        initialDate: evaluacion.fecha,
+        evaluation: evaluacion,
+      );
+      if (!mounted || result == null) return;
+      await _runHomeAction(
+        () => _evaluacionesService.actualizar(
+          evaluacion.copyWith(
+            titulo: result.title,
+            asignaturaId: result.subjectId,
+            tipo: result.type,
+            fecha: result.date,
+            hora: result.time,
+            limpiarHora: result.time == null,
+            descripcion: result.description,
+            limpiarDescripcion: result.description == null,
+            ponderacion: result.weight,
+            limpiarPonderacion: result.weight == null,
+          ),
+        ),
+        _espanol ? 'Evaluación actualizada.' : 'Evaluation updated.',
+      );
+    } else if (await _confirmDelete(evaluacion.titulo)) {
+      await _runHomeAction(
+        () => _evaluacionesService.eliminar(evaluacion.id),
+        _espanol ? 'Evaluación eliminada.' : 'Evaluation deleted.',
+      );
+    }
   }
 
-  // =========================================================
-  // EDUCFLOW AI
-  // =========================================================
+  Future<bool> _confirmDelete(String title) async =>
+      await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(_espanol ? '¿Eliminar elemento?' : 'Delete item?'),
+          content: Text(
+            _espanol
+                ? '¿Seguro que quieres eliminar “$title”? Esta acción no se puede deshacer.'
+                : 'Are you sure you want to delete “$title”? This cannot be undone.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: Text(_espanol ? 'Cancelar' : 'Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFDC2626),
+              ),
+              child: Text(_espanol ? 'Eliminar' : 'Delete'),
+            ),
+          ],
+        ),
+      ) ??
+      false;
 
-  void _abrirIA() {
-    HapticFeedback.selectionClick();
-    MainNavigation.goTo(context, SeccionPrincipal.ia);
+  Future<void> _runHomeAction(
+    Future<void> Function() action,
+    String success,
+  ) async {
+    try {
+      await action();
+      if (!mounted) return;
+      await _cargarContenido(forzar: true, silencioso: true);
+      if (mounted) showAppStatusSnackBar(context, message: success);
+    } catch (_) {
+      if (mounted) {
+        showAppStatusSnackBar(
+          context,
+          message: _espanol
+              ? 'No pudimos completar la acción.'
+              : 'We could not complete the action.',
+          type: AppStatusType.error,
+        );
+      }
+    }
   }
+
+  String _taskPriorityText(PrioridadTarea priority) => switch (priority) {
+    PrioridadTarea.baja => _espanol ? 'Prioridad baja' : 'Low priority',
+    PrioridadTarea.media => _espanol ? 'Prioridad media' : 'Medium priority',
+    PrioridadTarea.alta => _espanol ? 'Prioridad alta' : 'High priority',
+  };
 
   // =========================================================
   // BUILD
@@ -839,6 +1009,11 @@ class _DashboardPageState extends State<DashboardPage>
 
                         const SizedBox(height: 24),
 
+                        if (_testingMallaEnabled) ...[
+                          _buildTestingMallaAccess(oscuro),
+                          const SizedBox(height: 16),
+                        ],
+
                         if (_cargandoPerfil)
                           _buildLoading(oscuro)
                         else if (_errorPerfil)
@@ -867,22 +1042,7 @@ class _DashboardPageState extends State<DashboardPage>
               progress: _progresoHeader,
               title: _espanol ? 'Inicio' : 'Home',
               trailing: _buildCompactProfileButton(oscuro),
-              opaqueBackground: true,
             ),
-          ),
-
-          MainBottomNav(
-            currentIndex: 0,
-
-            onHome: _volverArriba,
-
-            onSchedule: _abrirHorario,
-
-            onAi: _abrirIA,
-
-            onCalendar: _abrirCalendario,
-
-            onNotifications: _abrirNotificaciones,
           ),
         ],
       ),
@@ -892,6 +1052,36 @@ class _DashboardPageState extends State<DashboardPage>
   // =========================================================
   // CONTENIDO DISPONIBLE
   // =========================================================
+
+  Widget _buildTestingMallaAccess(bool oscuro) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        key: const Key('home-testing-malla-access'),
+        onPressed: _abrirMallaTesting,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: _primaryColor,
+          backgroundColor: oscuro
+              ? const Color(0xFF1D1F38)
+              : const Color(0xFFF7F7FF),
+          side: BorderSide(
+            color: oscuro ? const Color(0xFF363964) : const Color(0xFFD9DBFF),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          textStyle: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+        icon: const Icon(Icons.science_outlined, size: 19),
+        label: Text(
+          _espanol
+              ? 'Probar malla curricular (Testing)'
+              : 'Test curriculum map (Testing)',
+        ),
+      ),
+    );
+  }
 
   Widget _buildAvailableContent(bool oscuro, double ancho) {
     final Widget? setup = !_tieneContenido
@@ -1630,8 +1820,8 @@ class _DashboardPageState extends State<DashboardPage>
 
                     Text(
                       _espanol
-                          ? 'Cuéntanos un poco sobre tus estudios para personalizar mejor EduFlow AI.'
-                          : 'Tell us a little about your studies so EduFlow AI can personalize your experience.',
+                          ? 'Cuéntanos un poco sobre tus estudios para personalizar mejor EducFlow AI.'
+                          : 'Tell us a little about your studies so EducFlow AI can personalize your experience.',
                       style: TextStyle(
                         color: oscuro
                             ? const Color(0xFFA9B1BF)

@@ -58,6 +58,13 @@ class AiDeterministicQueryService {
       return AiDeterministicQueryKind.gemini;
     }
 
+    // Crear o modificar un plan requiere contexto, razonamiento y una
+    // propuesta confirmable. Esta intención tiene prioridad aunque la frase
+    // también mencione horarios, clases, tareas o evaluaciones.
+    if (_isStudyPlanIntent(text)) {
+      return AiDeterministicQueryKind.gemini;
+    }
+
     // Las solicitudes creativas o de recomendación conservan el contexto y el
     // razonamiento de Gemini, aunque mencionen datos académicos.
     const complexMarkers = <String>{
@@ -204,6 +211,40 @@ class AiDeterministicQueryService {
     }
 
     return AiDeterministicQueryKind.gemini;
+  }
+
+  bool _isStudyPlanIntent(String text) {
+    final mentionsPlan = _containsAny(text, const [
+      'plan de estudio',
+      'plan de estudios',
+      'plan estudio',
+      'study plan',
+      'study schedule',
+      'cronograma de estudio',
+      'sesiones de estudio',
+      'sesiones de repaso',
+    ]);
+    if (mentionsPlan) return true;
+
+    final mentionsStudy = _containsAny(text, const [
+      'estudio',
+      'estudiar',
+      'repaso',
+      'practica',
+      'ejercicios practicos',
+    ]);
+    final requestsPlanning = _containsAnyWordStartingWith(text, const {
+      'arma',
+      'crea',
+      'genera',
+      'hazme',
+      'modifica',
+      'organiza',
+      'planifica',
+      'prepara',
+      'reprograma',
+    });
+    return mentionsStudy && requestsPlanning;
   }
 
   Future<String?> tryResolve(String message) async {
@@ -494,17 +535,27 @@ class AiDeterministicQueryService {
         'You have no registered classes for the requested period.',
       );
     }
-    final List<Asignatura> withTeacher = matches
-        .where((item) => _clean(item.profesor).isNotEmpty)
-        .toList();
-    if (withTeacher.isEmpty) {
-      return _tr(
-        english,
-        'No hay profesores registrados para las asignaturas consultadas.',
-        'There are no registered teachers for the requested subjects.',
-      );
-    }
-    return '${_tr(english, 'Profesores registrados:', 'Registered teachers:')}\n${withTeacher.take(maxItems).map((item) => '- ${item.nombre}: ${_clean(item.profesor)}').join('\n')}';
+    final lines = matches
+        .take(maxItems)
+        .map((item) {
+          final teacher = _clean(item.profesor);
+          final email = _clean(item.correoProfesor);
+          if (teacher.isEmpty) {
+            return english
+                ? '- ${item.nombre}: No teacher is registered.'
+                : '- ${item.nombre}: No hay profesor registrado.';
+          }
+          final emailText = email.isEmpty
+              ? _tr(
+                  english,
+                  'No hay correo registrado para este profesor.',
+                  'No email is registered for this teacher.',
+                )
+              : _tr(english, 'Correo: $email', 'Email: $email');
+          return '- ${item.nombre}: $teacher\n  $emailText';
+        })
+        .toList(growable: false);
+    return '${_tr(english, 'Profesores registrados:', 'Registered teachers:')}\n${lines.join('\n')}';
   }
 
   Future<String> _resolveRooms(String message) async {
@@ -576,9 +627,11 @@ class AiDeterministicQueryService {
     final List<({Asignatura subject, BloqueHorario block})> blocks =
         [
           for (final Asignatura subject in selection.subjects)
-            for (final BloqueHorario block in subject.horario)
-              if (targetWeekday == null || _weekday(block.dia) == targetWeekday)
-                (subject: subject, block: block),
+            if (subject.periodoAcademicoId?.trim().isEmpty != false)
+              for (final BloqueHorario block in subject.horario)
+                if (targetWeekday == null ||
+                    _weekday(block.dia) == targetWeekday)
+                  (subject: subject, block: block),
         ]..sort((a, b) {
           final int day = _weekday(a.block.dia)
               .compareTo(_weekday(b.block.dia));
@@ -639,13 +692,20 @@ class AiDeterministicQueryService {
       return subjects
           .where(
             (subject) =>
+                subject.periodoAcademicoId?.trim().isEmpty != false &&
                 subject.horario.any((block) => _weekday(block.dia) == target),
           )
           .toList();
     }
     if (scope.kind == AiDateScopeKind.thisWeek ||
         scope.kind == AiDateScopeKind.nextWeek) {
-      return subjects.where((subject) => subject.horario.isNotEmpty).toList();
+      return subjects
+          .where(
+            (subject) =>
+                subject.periodoAcademicoId?.trim().isEmpty != false &&
+                subject.horario.isNotEmpty,
+          )
+          .toList();
     }
     return subjects;
   }

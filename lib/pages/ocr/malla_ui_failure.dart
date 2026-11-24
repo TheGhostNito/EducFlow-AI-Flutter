@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../services/malla_multimodal_persistence_service.dart';
+
 enum MallaFailureKind {
   setup,
   connection,
@@ -11,6 +13,8 @@ enum MallaFailureKind {
   quota,
   file,
   empty,
+  persistence,
+  review,
   other,
 }
 
@@ -67,6 +71,8 @@ class MallaUiFailure {
           return const MallaUiFailure(MallaFailureKind.connection);
         case '23505':
           return const MallaUiFailure(MallaFailureKind.duplicate);
+        case '22023':
+          return const MallaUiFailure(MallaFailureKind.review);
       }
       return const MallaUiFailure(MallaFailureKind.other);
     }
@@ -100,11 +106,17 @@ class MallaUiFailure {
     if (error is TimeoutException) {
       return const MallaUiFailure(MallaFailureKind.connection);
     }
+    if (error is MallaMultimodalIntegrityException) {
+      return const MallaUiFailure(MallaFailureKind.persistence);
+    }
     if (error is FormatException) {
       return const MallaUiFailure(MallaFailureKind.empty);
     }
     if (error is ArgumentError) {
       return const MallaUiFailure(MallaFailureKind.file);
+    }
+    if (error is MallaMultimodalValidationException) {
+      return const MallaUiFailure(MallaFailureKind.review);
     }
     if (error is StateError) {
       return const MallaUiFailure(MallaFailureKind.permission);
@@ -161,6 +173,14 @@ class MallaUiFailure {
       spanish ? 'Archivo no compatible' : 'Unsupported file',
     MallaFailureKind.empty =>
       spanish ? 'No encontramos asignaturas' : 'No courses found',
+    MallaFailureKind.persistence =>
+      spanish
+          ? 'La malla se guardó, pero falta verificarla'
+          : 'Curriculum saved but could not be verified',
+    MallaFailureKind.review =>
+      spanish
+          ? 'Revisa las decisiones académicas'
+          : 'Review academic decisions',
     MallaFailureKind.other =>
       spanish
           ? 'No pudimos completar la operación'
@@ -196,6 +216,14 @@ class MallaUiFailure {
       spanish
           ? 'Prueba con un documento más nítido o selecciona otra malla.'
           : 'Try a clearer document or choose another curriculum.',
+    MallaFailureKind.persistence =>
+      spanish
+          ? 'Vuelve a cargar la aplicación antes de intentar otra importación. Tus datos pueden haberse guardado correctamente.'
+          : 'Reload the app before trying another import. Your data may have been saved correctly.',
+    MallaFailureKind.review =>
+      spanish
+          ? 'Hay una decisión aceptada sin evidencia suficiente o información pendiente incompatible. Corrígela o déjala pendiente antes de guardar.'
+          : 'An accepted decision lacks sufficient evidence or has incompatible pending information. Correct it or leave it pending before saving.',
     MallaFailureKind.other =>
       spanish
           ? 'Vuelve a intentarlo. Si el problema continúa, contacta al equipo de soporte.'

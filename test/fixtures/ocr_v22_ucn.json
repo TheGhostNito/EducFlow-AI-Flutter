@@ -1,0 +1,1109 @@
+{
+  "ok": true,
+  "extractionStatus": "courses_extracted",
+  "parsingMode": "layout_based",
+  "courseCount": 59,
+  "reviewCourseCount": 7,
+  "courseCreditsExpected": false,
+  "courses": [
+    {
+      "code": null,
+      "name": "Taller Desarrollo Personal I",
+      "credits": null,
+      "confidence": 0.9817046,
+      "semester": 1,
+      "semesterColumnX": 142.97386,
+      "position": {
+        "centerX": 146.24183,
+        "centerY": 213.443395
+      },
+      "sourceBlocks": [
+        5
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Psicología General",
+      "credits": null,
+      "confidence": 0.9693041,
+      "semester": 1,
+      "semesterColumnX": 142.97386,
+      "position": {
+        "centerX": 145.42484,
+        "centerY": 259.43397
+      },
+      "sourceBlocks": [
+        16
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Teoría y Sistemas Psicológicos I",
+      "credits": null,
+      "confidence": 0.9621298,
+      "semester": 1,
+      "semesterColumnX": 142.97386,
+      "position": {
+        "centerX": 146.241835,
+        "centerY": 306.60377500000004
+      },
+      "sourceBlocks": [
+        21
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Fund. Teóricos de las Culturas y las Sociedades",
+      "credits": null,
+      "confidence": 0.98516494,
+      "semester": 1,
+      "semesterColumnX": 142.97386,
+      "position": {
+        "centerX": 145.424837,
+        "centerY": 354.95284000000004
+      },
+      "sourceBlocks": [
+        26
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Bases Biológicas del Comportamiento I",
+      "romanSuffixEvidence": "ocr_strokes",
+      "romanSuffixReviewSuggested": true,
+      "nameAssociationUncertain": true,
+      "credits": null,
+      "confidence": 0.9601346,
+      "semester": 1,
+      "semesterColumnX": 142.97386,
+      "position": {
+        "centerX": 146.24183,
+        "centerY": 399.76415000000003
+      },
+      "sourceBlocks": [
+        28
+      ],
+      "quality": "review",
+      "needsReview": true,
+      "reviewReasons": [
+        "name_association_uncertain"
+      ]
+    },
+    {
+      "code": null,
+      "name": "Género, Derechos Humanos y Ciudadanía",
+      "credits": null,
+      "confidence": 0.9805198,
+      "semester": 1,
+      "semesterColumnX": 142.97386,
+      "position": {
+        "centerX": 145.4248375,
+        "centerY": 446.93395499999997
+      },
+      "sourceBlocks": [
+        34
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Teoría y Sistemas Psicológicos II",
+      "credits": null,
+      "confidence": 0.9549727,
+      "semester": 2,
+      "semesterColumnX": 142.973858,
+      "position": {
+        "centerX": 146.241835,
+        "centerY": 639.15095
+      },
+      "sourceBlocks": [
+        42
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Psicología Social",
+      "credits": null,
+      "confidence": 0.9554003,
+      "semester": 2,
+      "semesterColumnX": 142.973858,
+      "position": {
+        "centerX": 145.424843,
+        "centerY": 680.4245000000001
+      },
+      "sourceBlocks": [
+        48
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Bases Biológicas del Comportamiento II",
+      "credits": null,
+      "confidence": 0.9541685,
+      "semester": 2,
+      "semesterColumnX": 142.973858,
+      "position": {
+        "centerX": 145.42484000000002,
+        "centerY": 731.1320499999999
+      },
+      "sourceBlocks": [
+        52
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Procesos Afectivos y Motivacionales",
+      "credits": null,
+      "confidence": 0.9855708,
+      "semester": 2,
+      "semesterColumnX": 142.973858,
+      "position": {
+        "centerX": 146.24183499999998,
+        "centerY": 777.1225999999999
+      },
+      "sourceBlocks": [
+        53
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Filosofía de las Ciencias",
+      "credits": null,
+      "confidence": 0.9864119,
+      "semester": 2,
+      "semesterColumnX": 142.973858,
+      "position": {
+        "centerX": 145.42484,
+        "centerY": 823.1132
+      },
+      "sourceBlocks": [
+        54
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Ciclo Vital I",
+      "credits": null,
+      "confidence": 0.946709,
+      "semester": 2,
+      "semesterColumnX": 142.973858,
+      "position": {
+        "centerX": 146.24183499999998,
+        "centerY": 870.2829999999999
+      },
+      "sourceBlocks": [
+        62
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Formación General Teológica I",
+      "romanSuffixEvidence": "ocr_strokes",
+      "romanSuffixReviewSuggested": true,
+      "nameAssociationUncertain": true,
+      "credits": null,
+      "confidence": 0.9632348,
+      "semester": 2,
+      "semesterColumnX": 142.973858,
+      "position": {
+        "centerX": 146.241835,
+        "centerY": 916.2736
+      },
+      "sourceBlocks": [
+        67
+      ],
+      "quality": "review",
+      "needsReview": true,
+      "reviewReasons": [
+        "name_association_uncertain"
+      ]
+    },
+    {
+      "code": null,
+      "name": "Psicología de la Personalidad",
+      "credits": null,
+      "confidence": 0.98741096,
+      "semester": 3,
+      "semesterColumnX": 285.13072,
+      "position": {
+        "centerX": 285.947715,
+        "centerY": 213.4434
+      },
+      "sourceBlocks": [
+        1
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Psicología Comunitaria",
+      "credits": null,
+      "confidence": 0.9809596,
+      "semester": 3,
+      "semesterColumnX": 285.13072,
+      "position": {
+        "centerX": 285.94772,
+        "centerY": 258.25472
+      },
+      "sourceBlocks": [
+        17
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Psicología del Trabajo",
+      "credits": null,
+      "confidence": 0.98755234,
+      "semester": 3,
+      "semesterColumnX": 285.13072,
+      "position": {
+        "centerX": 285.94771499999996,
+        "centerY": 307.783025
+      },
+      "sourceBlocks": [
+        22
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Procesos Cognitivos",
+      "credits": null,
+      "confidence": 0.9828016,
+      "semester": 3,
+      "semesterColumnX": 285.13072,
+      "position": {
+        "centerX": 286.76471000000004,
+        "centerY": 356.132075
+      },
+      "sourceBlocks": [
+        27
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Fundamentos de Investigación",
+      "credits": null,
+      "confidence": 0.98208547,
+      "semester": 3,
+      "semesterColumnX": 285.13072,
+      "position": {
+        "centerX": 286.76469999999995,
+        "centerY": 400.94338
+      },
+      "sourceBlocks": [
+        29
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Ciclo Vital II",
+      "credits": null,
+      "confidence": 0.92286426,
+      "semester": 3,
+      "semesterColumnX": 285.13072,
+      "position": {
+        "centerX": 285.947725,
+        "centerY": 449.29247
+      },
+      "sourceBlocks": [
+        35
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Formación General Globalización I",
+      "romanSuffixEvidence": "ocr_strokes",
+      "romanSuffixReviewSuggested": true,
+      "nameAssociationUncertain": true,
+      "credits": null,
+      "confidence": 0.9695939,
+      "semester": 3,
+      "semesterColumnX": 285.13072,
+      "position": {
+        "centerX": 286.7647,
+        "centerY": 495.28302499999995
+      },
+      "sourceBlocks": [
+        38
+      ],
+      "quality": "review",
+      "needsReview": true,
+      "reviewReasons": [
+        "name_association_uncertain"
+      ]
+    },
+    {
+      "code": null,
+      "name": "Formación General Electiva",
+      "credits": null,
+      "confidence": 0.987342,
+      "semester": 3,
+      "semesterColumnX": 285.13072,
+      "position": {
+        "centerX": 285.94771000000003,
+        "centerY": 544.8113
+      },
+      "sourceBlocks": [
+        40
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Psicopatología I",
+      "romanSuffixEvidence": "ocr_strokes",
+      "romanSuffixReviewSuggested": true,
+      "nameAssociationUncertain": true,
+      "credits": null,
+      "confidence": 0.9553609,
+      "semester": 4,
+      "semesterColumnX": 284.31373,
+      "position": {
+        "centerX": 286.76471,
+        "centerY": 637.9717
+      },
+      "sourceBlocks": [
+        43
+      ],
+      "quality": "review",
+      "needsReview": true,
+      "reviewReasons": [
+        "name_association_uncertain"
+      ]
+    },
+    {
+      "code": null,
+      "name": "Psicología Social Contemporánea",
+      "credits": null,
+      "confidence": 0.96875966,
+      "semester": 4,
+      "semesterColumnX": 284.31373,
+      "position": {
+        "centerX": 286.76471,
+        "centerY": 683.96225
+      },
+      "sourceBlocks": [
+        49
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Psicología Organizacional",
+      "credits": null,
+      "confidence": 0.97701544,
+      "semester": 4,
+      "semesterColumnX": 284.31373,
+      "position": {
+        "centerX": 287.581705,
+        "centerY": 729.95285
+      },
+      "sourceBlocks": [
+        55
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Psicología del Aprendizaje",
+      "credits": null,
+      "confidence": 0.9852736,
+      "semester": 4,
+      "semesterColumnX": 284.31373,
+      "position": {
+        "centerX": 286.76471,
+        "centerY": 778.3018999999999
+      },
+      "sourceBlocks": [
+        56
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Metodología Cuantitativa I",
+      "romanSuffixEvidence": "ocr_strokes",
+      "romanSuffixReviewSuggested": true,
+      "nameAssociationUncertain": true,
+      "credits": null,
+      "confidence": 0.95596784,
+      "semester": 4,
+      "semesterColumnX": 284.31373,
+      "position": {
+        "centerX": 286.76471,
+        "centerY": 824.29245
+      },
+      "sourceBlocks": [
+        61
+      ],
+      "quality": "review",
+      "needsReview": true,
+      "reviewReasons": [
+        "name_association_uncertain"
+      ]
+    },
+    {
+      "code": null,
+      "name": "Formación General Globalización II",
+      "credits": null,
+      "confidence": 0.9557689,
+      "semester": 4,
+      "semesterColumnX": 284.31373,
+      "position": {
+        "centerX": 286.76471,
+        "centerY": 871.46225
+      },
+      "sourceBlocks": [
+        63
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Psicopatología II",
+      "credits": null,
+      "confidence": 0.94318837,
+      "semester": 5,
+      "semesterColumnX": 427.28758,
+      "position": {
+        "centerX": 429.73855000000003,
+        "centerY": 214.62264499999998
+      },
+      "sourceBlocks": [
+        14
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Modelos de Intervención Psicosocial",
+      "credits": null,
+      "confidence": 0.98770803,
+      "semester": 5,
+      "semesterColumnX": 427.28758,
+      "position": {
+        "centerX": 429.73856,
+        "centerY": 257.07546
+      },
+      "sourceBlocks": [
+        18
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Neuropsicología",
+      "credits": null,
+      "confidence": 0.9801134,
+      "semester": 5,
+      "semesterColumnX": 427.28758,
+      "position": {
+        "centerX": 429.73855000000003,
+        "centerY": 307.783025
+      },
+      "sourceBlocks": [
+        23
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Metodología Cuantitativa II",
+      "credits": null,
+      "confidence": 0.96350384,
+      "semester": 5,
+      "semesterColumnX": 427.28758,
+      "position": {
+        "centerX": 429.738565,
+        "centerY": 354.95282499999996
+      },
+      "sourceBlocks": [
+        30
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Evaluación y Psicodiagnóstico Infanto-Juvenil",
+      "credits": null,
+      "confidence": 0.96350384,
+      "semester": 5,
+      "semesterColumnX": 427.28758,
+      "position": {
+        "centerX": 430.14706,
+        "centerY": 408.018875
+      },
+      "sourceBlocks": [
+        30,
+        32
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Formación General Teológica II",
+      "credits": null,
+      "confidence": 0.95564,
+      "semester": 5,
+      "semesterColumnX": 427.28758,
+      "position": {
+        "centerX": 429.73855000000003,
+        "centerY": 450.4717
+      },
+      "sourceBlocks": [
+        36
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Formación General Globalización III",
+      "credits": null,
+      "confidence": 0.96943384,
+      "semester": 5,
+      "semesterColumnX": 427.28758,
+      "position": {
+        "centerX": 429.738565,
+        "centerY": 494.103775
+      },
+      "sourceBlocks": [
+        39
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Taller de Desarrollo Personal II",
+      "credits": null,
+      "confidence": 0.9616558,
+      "semester": 6,
+      "semesterColumnX": 427.287575,
+      "position": {
+        "centerX": 428.921565,
+        "centerY": 636.79245
+      },
+      "sourceBlocks": [
+        46
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Psicología de la Salud",
+      "credits": null,
+      "confidence": 0.97782004,
+      "semester": 6,
+      "semesterColumnX": 427.287575,
+      "position": {
+        "centerX": 428.10457999999994,
+        "centerY": 681.60375
+      },
+      "sourceBlocks": [
+        50
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Formulación y Gestión de Proyectos",
+      "credits": null,
+      "confidence": 0.98195285,
+      "semester": 6,
+      "semesterColumnX": 427.287575,
+      "position": {
+        "centerX": 428.92156,
+        "centerY": 731.13205
+      },
+      "sourceBlocks": [
+        57
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Psicología Educacional I",
+      "credits": null,
+      "confidence": 0.95795166,
+      "semester": 6,
+      "semesterColumnX": 427.287575,
+      "position": {
+        "centerX": 428.92156,
+        "centerY": 777.12265
+      },
+      "sourceBlocks": [
+        59
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Evaluación y Psicodiagnóstico Adulto",
+      "credits": null,
+      "confidence": 0.9800794,
+      "semester": 6,
+      "semesterColumnX": 427.287575,
+      "position": {
+        "centerX": 428.10457999999994,
+        "centerY": 825.4717
+      },
+      "sourceBlocks": [
+        64
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Introducción a la Psicoterapia",
+      "credits": null,
+      "confidence": 0.9819,
+      "semester": 6,
+      "semesterColumnX": 427.287575,
+      "position": {
+        "centerX": 428.921565,
+        "centerY": 872.6415
+      },
+      "sourceBlocks": [
+        65
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Formación General Globalización IV",
+      "credits": null,
+      "confidence": 0.9873161,
+      "semester": 6,
+      "semesterColumnX": 427.287575,
+      "position": {
+        "centerX": 428.921565,
+        "centerY": 917.4528
+      },
+      "sourceBlocks": [
+        71
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Formación Profesional Electiva",
+      "credits": null,
+      "confidence": 0.98794055,
+      "semester": 7,
+      "semesterColumnX": 570.26142,
+      "position": {
+        "centerX": 571.89545,
+        "centerY": 212.26415
+      },
+      "sourceBlocks": [
+        15
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Taller Integrador I: Diagnóstico",
+      "credits": null,
+      "confidence": 0.9656831,
+      "semester": 7,
+      "semesterColumnX": 570.26142,
+      "position": {
+        "centerX": 571.89545,
+        "centerY": 261.79245000000003
+      },
+      "sourceBlocks": [
+        19
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Intervención Psicolaboral",
+      "credits": null,
+      "confidence": 0.9856045,
+      "semester": 7,
+      "semesterColumnX": 570.26142,
+      "position": {
+        "centerX": 571.8954249999999,
+        "centerY": 306.603775
+      },
+      "sourceBlocks": [
+        24
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Psicología Educacional II",
+      "credits": null,
+      "confidence": 0.954462,
+      "semester": 7,
+      "semesterColumnX": 570.26142,
+      "position": {
+        "centerX": 571.8954249999999,
+        "centerY": 352.594325
+      },
+      "sourceBlocks": [
+        31
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Metodología Cualitativa I",
+      "romanSuffixEvidence": "ocr_strokes",
+      "romanSuffixReviewSuggested": true,
+      "nameAssociationUncertain": true,
+      "credits": null,
+      "confidence": 0.9599716,
+      "semester": 7,
+      "semesterColumnX": 570.26142,
+      "position": {
+        "centerX": 571.8954249999999,
+        "centerY": 402.12262499999997
+      },
+      "sourceBlocks": [
+        33
+      ],
+      "quality": "review",
+      "needsReview": true,
+      "reviewReasons": [
+        "name_association_uncertain"
+      ]
+    },
+    {
+      "code": null,
+      "name": "Psicoterapia Infanto-Juvenil",
+      "credits": null,
+      "confidence": 0.9868701,
+      "semester": 7,
+      "semesterColumnX": 570.26142,
+      "position": {
+        "centerX": 571.89542,
+        "centerY": 449.29245000000003
+      },
+      "sourceBlocks": [
+        37
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Formación Profesional Electiva",
+      "credits": null,
+      "confidence": 0.9872584,
+      "semester": 8,
+      "semesterColumnX": 570.26145,
+      "position": {
+        "centerX": 570.26145,
+        "centerY": 635.6132
+      },
+      "sourceBlocks": [
+        47
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Taller Integrador II: Intervención",
+      "credits": null,
+      "confidence": 0.95326954,
+      "semester": 8,
+      "semesterColumnX": 570.26145,
+      "position": {
+        "centerX": 569.44445,
+        "centerY": 683.96225
+      },
+      "sourceBlocks": [
+        51
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Psicología Clínica de la Salud",
+      "credits": null,
+      "confidence": 0.97483116,
+      "semester": 8,
+      "semesterColumnX": 570.26145,
+      "position": {
+        "centerX": 571.07842,
+        "centerY": 731.1320499999999
+      },
+      "sourceBlocks": [
+        58
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Psicología Jurídica y Forense",
+      "credits": null,
+      "confidence": 0.97869915,
+      "semester": 8,
+      "semesterColumnX": 570.26145,
+      "position": {
+        "centerX": 571.07842,
+        "centerY": 778.3018999999999
+      },
+      "sourceBlocks": [
+        60
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Metodología Cualitativa II",
+      "credits": null,
+      "confidence": 0.95258015,
+      "semester": 8,
+      "semesterColumnX": 570.26145,
+      "position": {
+        "centerX": 571.0784249999999,
+        "centerY": 823.1132
+      },
+      "sourceBlocks": [
+        66
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Psicoterapia Adulto",
+      "credits": null,
+      "confidence": 0.9881975,
+      "semester": 8,
+      "semesterColumnX": 570.26145,
+      "position": {
+        "centerX": 571.07845,
+        "centerY": 872.6415
+      },
+      "sourceBlocks": [
+        72
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Formación General Teológica III",
+      "credits": null,
+      "confidence": 0.96275574,
+      "semester": 8,
+      "semesterColumnX": 570.26145,
+      "position": {
+        "centerX": 571.07845,
+        "centerY": 919.8113000000001
+      },
+      "sourceBlocks": [
+        73
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Práctica Profesional I",
+      "romanSuffixEvidence": "ocr_strokes",
+      "romanSuffixReviewSuggested": true,
+      "nameAssociationUncertain": true,
+      "credits": null,
+      "confidence": 0.95954883,
+      "semester": 9,
+      "semesterColumnX": 712.4182900000001,
+      "position": {
+        "centerX": 711.601315,
+        "centerY": 213.443395
+      },
+      "sourceBlocks": [
+        13
+      ],
+      "quality": "review",
+      "needsReview": true,
+      "reviewReasons": [
+        "name_association_uncertain"
+      ]
+    },
+    {
+      "code": null,
+      "name": "Seminario I",
+      "credits": null,
+      "confidence": 0.9525801,
+      "semester": 9,
+      "semesterColumnX": 712.4182900000001,
+      "position": {
+        "centerX": 712.4183,
+        "centerY": 260.61322
+      },
+      "sourceBlocks": [
+        20
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Formación General Teológica IV",
+      "credits": null,
+      "confidence": 0.979851,
+      "semester": 9,
+      "semesterColumnX": 712.4182900000001,
+      "position": {
+        "centerX": 714.05229,
+        "centerY": 307.78301999999996
+      },
+      "sourceBlocks": [
+        25
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Práctica Profesional II",
+      "credits": null,
+      "confidence": 0.94643,
+      "semester": 10,
+      "semesterColumnX": 713.2352900000001,
+      "position": {
+        "centerX": 710.784315,
+        "centerY": 635.6132
+      },
+      "sourceBlocks": [
+        69
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    },
+    {
+      "code": null,
+      "name": "Seminario II",
+      "credits": null,
+      "confidence": 0.9236964,
+      "semester": 10,
+      "semesterColumnX": 713.2352900000001,
+      "position": {
+        "centerX": 710.78433,
+        "centerY": 683.96225
+      },
+      "sourceBlocks": [
+        70
+      ],
+      "quality": "high",
+      "needsReview": false,
+      "reviewReasons": []
+    }
+  ],
+  "specialCurricularElements": []
+}

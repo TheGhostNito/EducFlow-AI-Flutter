@@ -786,6 +786,10 @@ class _SubjectEditPanelState extends State<SubjectEditPanel> {
 
       anioAcademico: _isSchool ? academicYear : null,
 
+      // La edición manual no cambia la pertenencia académica establecida por
+      // la importación o por el servicio de períodos.
+      periodoAcademicoId: widget.subject.periodoAcademicoId,
+
       // Curso / otro.
       modalidad: _isCourseOther ? _modality : null,
 

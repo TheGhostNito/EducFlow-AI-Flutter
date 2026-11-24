@@ -15,13 +15,14 @@ Future<T?> showProfileOptionSheet<T>({
   required String title,
   required List<ProfileOption<T>> options,
   T? selectedValue,
+  Color? barrierColor,
 }) {
   return showModalBottomSheet<T>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
     backgroundColor: Colors.transparent,
-    barrierColor: Colors.black.withValues(alpha: 0.78),
+    barrierColor: barrierColor ?? Colors.black.withValues(alpha: 0.78),
     builder: (context) {
       return _ProfileOptionSheet<T>(
         title: title,

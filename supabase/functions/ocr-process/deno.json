@@ -1,0 +1,6 @@
+{
+  "tasks": {
+    "check": "deno check index.ts",
+    "test": "deno test --allow-env=EDUFLOW_FIREBASE_PROJECT_ID,SUPABASE_URL firebase_identity_test.ts index_test.ts temporary_cleanup_test.ts"
+  }
+}

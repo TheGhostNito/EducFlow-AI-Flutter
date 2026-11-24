@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:firebase_ai/firebase_ai.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
@@ -5,7 +7,10 @@ import 'package:flutter/foundation.dart';
 import '../models/asignatura.dart';
 import '../models/evaluacion.dart';
 import '../models/nota.dart';
+import '../models/periodo_academico.dart';
+import '../models/plan_estudio.dart';
 import '../models/perfil_usuario.dart';
+import '../models/sesion_clase.dart';
 import '../models/ai_conversation.dart';
 import '../models/tarea.dart';
 import 'asignaturas_service.dart';
@@ -13,11 +18,15 @@ import 'ai_deterministic_query_service.dart';
 import 'ai_conversation_context.dart';
 import 'ai_failure_diagnostics.dart';
 import 'ai_function_calling_flow.dart';
+import 'ai_schedule_context_builder.dart';
 import 'analisis_notas_ia_service.dart';
 import 'calculo_notas_service.dart';
 import 'evaluaciones_service.dart';
 import 'notas_service.dart';
 import 'perfil_service.dart';
+import 'periodos_academicos_service.dart';
+import 'plan_estudio_proposal_builder.dart';
+import 'sesiones_clase_service.dart';
 import 'tareas_service.dart';
 
 abstract interface class AiAssistantClient {
@@ -34,21 +43,36 @@ abstract interface class AiAssistantClient {
   });
 }
 
-class AiService implements AiAssistantClient {
+abstract interface class AiStudyPlanProposalSource {
+  PlanEstudioPropuesto? tomarUltimaPropuestaPlanEstudio();
+
+  void descartarPlanEstudio(String planId);
+}
+
+class AiService implements AiAssistantClient, AiStudyPlanProposalSource {
   AiService._();
 
   static final AiService instance = AiService._();
   static const String modelName = 'gemini-3.5-flash';
+  static const double modelTemperature = 0.35;
+  static const int modelMaxOutputTokens = 4096;
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final PerfilService _perfilService = PerfilService();
   final AsignaturasService _asignaturasService = AsignaturasService.instance;
   final TareasService _tareasService = TareasService.instance;
   final EvaluacionesService _evaluacionesService = EvaluacionesService.instance;
+  final PeriodosAcademicosService _periodosService =
+      PeriodosAcademicosService();
+  final SesionesClaseService _sesionesClaseService = SesionesClaseService();
   final NotasService _notasService = NotasService.instance;
   final CalculoNotasService _calculoNotasService = const CalculoNotasService();
   final AnalisisNotasIaService _analisisNotasIaService =
       const AnalisisNotasIaService();
+  final PlanEstudioProposalBuilder _planEstudioBuilder =
+      const PlanEstudioProposalBuilder();
+  final AiScheduleContextBuilder _scheduleContextBuilder =
+      const AiScheduleContextBuilder();
   late final AiFunctionCallingFlow _functionCallingFlow = AiFunctionCallingFlow(
     logger: _registrarDiagnostico,
   );
@@ -63,12 +87,15 @@ class AiService implements AiAssistantClient {
   String? _chatUid;
   String? _conversationId;
   List<AiChatMessage> _loadedHistory = const [];
+  PlanEstudioPropuesto? _planEstudioActual;
+  PlanEstudioPropuesto? _ultimaPropuestaPlanEstudio;
+  final Set<String> _toolsConsultedThisRequest = {};
 
   late final GenerativeModel _model = FirebaseAI.googleAI().generativeModel(
     model: modelName,
     generationConfig: GenerationConfig(
-      temperature: 0.35,
-      maxOutputTokens: 1800,
+      temperature: modelTemperature,
+      maxOutputTokens: modelMaxOutputTokens,
     ),
     systemInstruction: Content.system('''
 Eres EducFlow AI, el asistente académico inteligente de la aplicación EducFlow AI.
@@ -80,12 +107,20 @@ REGLAS IMPORTANTES:
 - No inventes información académica.
 - Cuando una pregunta dependa de datos reales de EducFlow, usa las herramientas disponibles.
 - Los datos devueltos por las herramientas son la fuente de verdad.
+- Un resultado con exito false indica un error de consulta, no ausencia de datos. En ese caso informa que no fue posible consultar el contexto y no digas que el usuario carece de horarios, tareas, evaluaciones o asignaturas.
+- Solo interpreta que no existe horario cuando obtenerHorario responde exito true y sinDatos true.
 - Para notas, promedios, objetivos y proyecciones usa siempre analizarNotas. No recalcules ni inventes resultados: interpreta el resultado determinista que entrega esa herramienta.
 - Puedes usar varias herramientas para una misma respuesta.
 - Si un dato no está disponible, dilo claramente.
 - Para referencias como hoy, mañana, esta semana, pendientes o próximas evaluaciones, usa la fecha actual devuelta por las herramientas.
-- Por ahora solo tienes herramientas de lectura. No afirmes que modificaste, creaste, completaste o eliminaste información.
-- Si el usuario pide modificar datos, explica brevemente que comprendiste la solicitud pero que la confirmación de cambios se habilitará en la siguiente etapa.
+- Las herramientas académicas son de lectura. proponerPlanEstudio solo crea o reemplaza una propuesta local: nunca guarda actividades por sí misma.
+- Para un plan de estudio consulta asignaturas y, cuando corresponda, evaluaciones, tareas y horario antes de proponerlo. Si falta la asignatura, la fecha objetivo o una preferencia indispensable, pregunta antes de crear la propuesta.
+- Toda propuesta debe respetar clases, evaluaciones, tareas y otras sesiones conocidas. No inventes disponibilidad ni fechas académicas.
+- Para crear o modificar un plan usa proponerPlanEstudio y entrega siempre la propuesta completa actualizada. Las sesiones inequívocas usan fechas YYYY-MM-DD, horas HH:mm y duraciones razonables.
+- Después de proponer o modificar, explica que el plan aún no está guardado y que el estudiante debe revisarlo y confirmarlo mediante la acción Guardar del chat.
+- Cuando proponerPlanEstudio tenga éxito, responde con una introducción breve y útil. No vuelvas a enumerar sesiones, fechas, horarios ni actividades: la tarjeta estructurada es la representación principal del plan.
+- No afirmes que una propuesta quedó en el Calendario: la aplicación confirma el guardado solo después de que Supabase responde correctamente.
+- Para otras modificaciones de datos que no sean propuestas de planes, explica que esa escritura todavía no está disponible.
 - No muestres IDs internos salvo que sea estrictamente necesario.
 '''),
     tools: [
@@ -114,6 +149,46 @@ REGLAS IMPORTANTES:
           'obtenerEvaluaciones',
           'Obtiene las evaluaciones reales del usuario, incluyendo asignatura, tipo, fecha, hora, descripción y ponderación.',
           parameters: const {},
+        ),
+        FunctionDeclaration(
+          'proponerPlanEstudio',
+          'Crea o reemplaza la propuesta local de plan de estudio que el estudiante debe revisar antes de guardar. Úsala solo después de resolver asignatura, fecha objetivo, disponibilidad y conflictos con las herramientas de lectura.',
+          parameters: {
+            'titulo': Schema.string(
+              description: 'Título breve y legible del plan.',
+            ),
+            'objetivo': Schema.string(
+              description: 'Objetivo académico concreto del plan.',
+            ),
+            'asignaturaId': Schema.string(
+              description: 'ID exacto devuelto por obtenerAsignaturas.',
+            ),
+            'asignatura': Schema.string(
+              description: 'Nombre o sigla exactos de la asignatura.',
+            ),
+            'evaluacionId': Schema.string(
+              description: 'ID de la evaluación que origina el plan.',
+            ),
+            'sesiones': Schema.array(
+              description: 'Propuesta completa, incluyendo las sesiones conservadas al modificarla.',
+              items: Schema.object(
+                properties: {
+                  'titulo': Schema.string(),
+                  'actividad': Schema.string(),
+                  'fecha': Schema.string(
+                    description: 'Fecha local exacta YYYY-MM-DD.',
+                  ),
+                  'horaInicio': Schema.string(
+                    description: 'Hora local exacta HH:mm.',
+                  ),
+                  'duracionMinutos': Schema.integer(
+                    description: 'Duración entre 15 y 240 minutos.',
+                  ),
+                },
+              ),
+            ),
+          },
+          optionalParameters: const ['evaluacionId'],
         ),
         FunctionDeclaration(
           'analizarNotas',
@@ -164,6 +239,9 @@ REGLAS IMPORTANTES:
     _chatUid = null;
     _conversationId = null;
     _loadedHistory = const [];
+    _planEstudioActual = null;
+    _ultimaPropuestaPlanEstudio = null;
+    _toolsConsultedThisRequest.clear();
   }
 
   @override
@@ -178,6 +256,10 @@ REGLAS IMPORTANTES:
       throw StateError('No existe un usuario autenticado.');
     }
 
+    if (_conversationId != conversationId || _chatUid != user.uid) {
+      _planEstudioActual = null;
+      _ultimaPropuestaPlanEstudio = null;
+    }
     _chatUid = user.uid;
     _conversationId = conversationId;
     _loadedHistory = List<AiChatMessage>.of(history);
@@ -221,10 +303,11 @@ REGLAS IMPORTANTES:
       );
     }
 
+    _ultimaPropuestaPlanEstudio = null;
     final Stopwatch requestStopwatch = Stopwatch()..start();
-    final String? deterministic = await _deterministicQueryService.tryResolve(
-      texto,
-    );
+    final String? deterministic = _planEstudioActual == null
+        ? await _deterministicQueryService.tryResolve(texto)
+        : null;
     if (deterministic != null) {
       requestStopwatch.stop();
       _registrarDiagnostico('assistant_request_completed', {
@@ -235,6 +318,7 @@ REGLAS IMPORTANTES:
     }
 
     _registrarDiagnostico('assistant_route_selected', {'route': 'gemini'});
+    final textoModelo = _mensajeConPlanActual(texto);
     final ChatSession chat = _model.startChat(
       history: _buildModelHistory(
         history.isEmpty ? _loadedHistory : history,
@@ -245,7 +329,7 @@ REGLAS IMPORTANTES:
     try {
       final String response = await _functionCallingFlow.run(
         sendInitialMessage: () async {
-          final response = await chat.sendMessage(Content.text(texto));
+          final response = await chat.sendMessage(Content.text(textoModelo));
           return _convertirTurno(response);
         },
         executeTool: (call) => _ejecutarHerramienta(call.name, call.arguments),
@@ -304,25 +388,40 @@ REGLAS IMPORTANTES:
     String nombre,
     Map<String, Object?> argumentos,
   ) async {
+    final Map<String, Object?> result;
     switch (nombre) {
       case 'obtenerPerfil':
-        return _obtenerPerfil();
+        result = await _obtenerPerfil();
+        break;
       case 'obtenerAsignaturas':
-        return _obtenerAsignaturas();
+        result = await _obtenerAsignaturas();
+        break;
       case 'obtenerHorario':
-        return _obtenerHorario();
+        result = await _obtenerHorario();
+        break;
       case 'obtenerTareas':
-        return _obtenerTareas();
+        result = await _obtenerTareas();
+        break;
       case 'obtenerEvaluaciones':
-        return _obtenerEvaluaciones();
+        result = await _obtenerEvaluaciones();
+        break;
+      case 'proponerPlanEstudio':
+        result = await _proponerPlanEstudio(argumentos);
+        break;
       case 'analizarNotas':
-        return _obtenerAnalisisNotas(argumentos);
+        result = await _obtenerAnalisisNotas(argumentos);
+        break;
       default:
-        return {
+        result = {
           'exito': false,
           'error': 'Herramienta no implementada: $nombre',
         };
+        break;
     }
+    if (result['exito'] != false) {
+      _toolsConsultedThisRequest.add(nombre);
+    }
+    return result;
   }
 
   Future<Map<String, Object?>> _obtenerPerfil() async {
@@ -368,6 +467,7 @@ REGLAS IMPORTANTES:
       'cantidad': asignaturas.length,
       'asignaturas': asignaturas.map((asignatura) {
         return {
+          'id': asignatura.id,
           'nombre': asignatura.nombre,
           'profesor': _nullable(asignatura.profesor),
           'sala': _nullable(asignatura.sala),
@@ -389,55 +489,42 @@ REGLAS IMPORTANTES:
   }
 
   Future<Map<String, Object?>> _obtenerHorario() async {
-    final List<Asignatura> asignaturas = await _asignaturasService
-        .obtenerTodas();
-    final List<Map<String, Object?>> clases = [];
-
-    for (final Asignatura asignatura in asignaturas) {
-      for (final BloqueHorario bloque in asignatura.horario) {
-        final String salaBloque = bloque.sala?.trim() ?? '';
-        final String salaAsignatura = asignatura.sala?.trim() ?? '';
-
-        clases.add({
-          'asignatura': asignatura.nombre,
-          'sigla': _nullable(asignatura.sigla),
-          'dia': bloque.dia.valorFirestore,
-          'horaInicio': bloque.horaInicio,
-          'horaFin': bloque.horaFin,
-          'sala': salaBloque.isNotEmpty
-              ? salaBloque
-              : salaAsignatura.isNotEmpty
-              ? salaAsignatura
-              : null,
-          'profesor': _nullable(asignatura.profesor),
-          'seccion': _nullable(asignatura.seccion),
-        });
-      }
-    }
-
-    clases.sort((a, b) {
-      final int dayA = _ordenDia(a['dia']?.toString() ?? '');
-      final int dayB = _ordenDia(b['dia']?.toString() ?? '');
-
-      if (dayA != dayB) {
-        return dayA.compareTo(dayB);
-      }
-
-      return (a['horaInicio']?.toString() ?? '').compareTo(
-        b['horaInicio']?.toString() ?? '',
+    try {
+      final asignaturas = await _asignaturasService.obtenerTodas();
+      final tienePeriodos = asignaturas.any(
+        (asignatura) =>
+            asignatura.periodoAcademicoId?.trim().isNotEmpty == true,
       );
-    });
-
-    final DateTime now = DateTime.now();
-
-    return {
-      'exito': true,
-      'fechaActual': _fechaActual(),
-      'diaActual': _nombreDia(now.weekday),
-      'diaManana': _nombreDia(now.add(const Duration(days: 1)).weekday),
-      'cantidadBloques': clases.length,
-      'clases': clases,
-    };
+      final List<PeriodoAcademico> periodos;
+      final List<SesionClase> sesiones;
+      if (tienePeriodos) {
+        final complementos = await Future.wait([
+          _periodosService.obtenerTodos(),
+          _sesionesClaseService.obtenerTodas(),
+        ]);
+        periodos = complementos[0] as List<PeriodoAcademico>;
+        sesiones = complementos[1] as List<SesionClase>;
+      } else {
+        periodos = const [];
+        sesiones = const [];
+      }
+      return _scheduleContextBuilder.build(
+        subjects: asignaturas,
+        periods: periodos,
+        sessions: sesiones,
+        now: DateTime.now(),
+      );
+    } catch (error) {
+      _registrarDiagnostico('obtener_horario_failed', {
+        'errorType': error.runtimeType.toString(),
+      });
+      return {
+        'exito': false,
+        'estado': 'error_consulta_horario',
+        'sinDatos': false,
+        'error': 'No fue posible consultar el horario académico. No interpretes este error como ausencia de bloques.',
+      };
+    }
   }
 
   Future<Map<String, Object?>> _obtenerTareas() async {
@@ -490,6 +577,7 @@ REGLAS IMPORTANTES:
       'cantidad': evaluaciones.length,
       'evaluaciones': evaluaciones.map((evaluacion) {
         return {
+          'id': evaluacion.id,
           'titulo': evaluacion.titulo,
           'asignatura':
               nombres[evaluacion.asignaturaId] ?? 'Asignatura no disponible',
@@ -501,6 +589,87 @@ REGLAS IMPORTANTES:
         };
       }).toList(),
     };
+  }
+
+  Future<Map<String, Object?>> _proponerPlanEstudio(
+    Map<String, Object?> argumentos,
+  ) async {
+    try {
+      const requiredContextTools = {
+        'obtenerAsignaturas',
+        'obtenerHorario',
+        'obtenerTareas',
+        'obtenerEvaluaciones',
+      };
+      final missingTools = requiredContextTools
+          .difference(_toolsConsultedThisRequest)
+          .toList(growable: false);
+      if (missingTools.isNotEmpty) {
+        return {
+          'exito': false,
+          'error': 'Falta consultar contexto académico antes de proponer.',
+          'herramientasPendientes': missingTools,
+          'instruccion': 'Consulta estas herramientas y luego vuelve a llamar proponerPlanEstudio.',
+        };
+      }
+      final asignaturas = await _asignaturasService.obtenerTodas();
+      final conversationId = _conversationId;
+      if (conversationId == null) {
+        return const {
+          'exito': false,
+          'error': 'No existe una conversación activa para la propuesta.',
+        };
+      }
+      final propuesta = _planEstudioBuilder.build(
+        arguments: argumentos,
+        asignaturas: asignaturas,
+        conversationId: conversationId,
+        now: DateTime.now(),
+        current: _planEstudioActual,
+      );
+      _planEstudioActual = propuesta;
+      _ultimaPropuestaPlanEstudio = propuesta;
+      return {
+        'exito': true,
+        'estado': 'propuesta_no_guardada',
+        'requiereConfirmacion': true,
+        'plan': propuesta.toJson(),
+      };
+    } on FormatException catch (error) {
+      return {
+        'exito': false,
+        'error': error.message,
+        'instruccion': 'Pregunta por el dato faltante o corrige la propuesta sin inventarlo.',
+      };
+    }
+  }
+
+  String _mensajeConPlanActual(String mensaje) {
+    final plan = _planEstudioActual;
+    if (plan == null) return mensaje;
+    return '''
+$mensaje
+
+[CONTEXTO INTERNO: PROPUESTA DE PLAN ACTUAL]
+${jsonEncode(plan.toJson())}
+[FIN DEL CONTEXTO INTERNO]
+Si el usuario solicita una modificación del plan, llama nuevamente a proponerPlanEstudio con la propuesta completa actualizada. No afirmes que está guardado.
+''';
+  }
+
+  @override
+  PlanEstudioPropuesto? tomarUltimaPropuestaPlanEstudio() {
+    final propuesta = _ultimaPropuestaPlanEstudio;
+    _ultimaPropuestaPlanEstudio = null;
+    return propuesta;
+  }
+
+  @override
+  void descartarPlanEstudio(String planId) {
+    if (_planEstudioActual?.id == planId) {
+      _planEstudioActual = null;
+      _ultimaPropuestaPlanEstudio = null;
+    }
   }
 
   Future<Map<String, Object?>> _obtenerAnalisisNotas(
@@ -665,45 +834,5 @@ REGLAS IMPORTANTES:
   String? _nullable(String? value) {
     final String clean = value?.trim() ?? '';
     return clean.isEmpty ? null : clean;
-  }
-
-  int _ordenDia(String value) {
-    switch (value) {
-      case 'lunes':
-        return 1;
-      case 'martes':
-        return 2;
-      case 'miercoles':
-        return 3;
-      case 'jueves':
-        return 4;
-      case 'viernes':
-        return 5;
-      case 'sabado':
-        return 6;
-      default:
-        return 7;
-    }
-  }
-
-  String _nombreDia(int weekday) {
-    switch (weekday) {
-      case DateTime.monday:
-        return 'lunes';
-      case DateTime.tuesday:
-        return 'martes';
-      case DateTime.wednesday:
-        return 'miercoles';
-      case DateTime.thursday:
-        return 'jueves';
-      case DateTime.friday:
-        return 'viernes';
-      case DateTime.saturday:
-        return 'sabado';
-      case DateTime.sunday:
-        return 'domingo';
-      default:
-        return '';
-    }
   }
 }

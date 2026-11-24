@@ -7,16 +7,17 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:ionicons/ionicons.dart';
 
 import '../../core/navigation/main_navigation.dart';
-import '../../widgets/main_bottom_nav.dart';
-import '../../widgets/main_section_scroll.dart';
 
 import '../../models/ai_conversation.dart';
+import '../../models/plan_estudio.dart';
 import '../../services/ai_chat_history_service.dart';
 import '../../services/supabase_ai_chat_history_repository.dart';
 import '../../services/ai_function_calling_flow.dart';
 import '../../services/ai_failure_diagnostics.dart';
 import '../../services/ai_service.dart';
+import '../../services/ai_study_plan_message_codec.dart';
 import '../../services/beta_notice_service.dart';
+import '../../services/plan_estudio_service.dart';
 import '../../services/translation_service.dart';
 import '../../widgets/app_pressable.dart';
 import '../../widgets/app_status_snackbar.dart';
@@ -33,6 +34,7 @@ class AiChatPage extends StatefulWidget {
     this.initialConversationLoadOverride,
     this.aiService,
     this.historyService,
+    this.planEstudioPersistence,
   });
 
   final SessionController? sessionController;
@@ -41,6 +43,7 @@ class AiChatPage extends StatefulWidget {
   final Future<void> Function()? initialConversationLoadOverride;
   final AiAssistantClient? aiService;
   final AiChatHistoryRepository? historyService;
+  final PlanEstudioPersistence? planEstudioPersistence;
 
   @override
   State<AiChatPage> createState() => _AiChatPageState();
@@ -56,6 +59,7 @@ class _AiChatPageState extends State<AiChatPage> with WidgetsBindingObserver {
 
   late final AiAssistantClient _aiService;
   late final AiChatHistoryRepository _historyService;
+  late final PlanEstudioPersistence _planEstudioPersistence;
   late final BetaNoticeCoordinator _betaNoticeService;
   late final SessionController _sessionController;
   final TranslationService _translationService = TranslationService.instance;
@@ -67,6 +71,11 @@ class _AiChatPageState extends State<AiChatPage> with WidgetsBindingObserver {
   final FocusNode _focusNode = FocusNode();
 
   final List<AiChatMessage> _messages = [];
+  final Map<String, PlanEstudioPropuesto> _studyPlansByMessage = {};
+  final Set<String> _savingStudyPlans = {};
+  final Set<String> _savedStudyPlans = {};
+  final Set<String> _cancelledStudyPlans = {};
+  String? _activeStudyPlanMessageId;
 
   AiConversation? _conversation;
   bool _loadingConversation = true;
@@ -91,6 +100,8 @@ class _AiChatPageState extends State<AiChatPage> with WidgetsBindingObserver {
     _aiService = widget.aiService ?? AiService.instance;
     _historyService =
         widget.historyService ?? SupabaseAiChatHistoryRepository.instance;
+    _planEstudioPersistence =
+        widget.planEstudioPersistence ?? PlanEstudioService.instance;
 
     _translationService.addListener(_refreshLanguage);
     _focusNode.addListener(_refreshFocus);
@@ -238,6 +249,7 @@ class _AiChatPageState extends State<AiChatPage> with WidgetsBindingObserver {
         setState(() {
           _conversation = null;
           _messages.clear();
+          _clearStudyPlans();
         });
 
         return;
@@ -248,6 +260,7 @@ class _AiChatPageState extends State<AiChatPage> with WidgetsBindingObserver {
         _historyTimeout,
         'leer_historial',
       );
+      final restored = await _restoreStudyPlanHistory(messages);
       if (!_sessionController.isCurrentTicket(sessionTicket) ||
           loadGeneration != _requestGeneration) {
         return;
@@ -255,7 +268,7 @@ class _AiChatPageState extends State<AiChatPage> with WidgetsBindingObserver {
 
       _aiService.iniciarConversacion(
         conversationId: conversation.id,
-        history: messages,
+        history: restored.messages,
       );
 
       if (!mounted) {
@@ -266,7 +279,8 @@ class _AiChatPageState extends State<AiChatPage> with WidgetsBindingObserver {
         _conversation = conversation;
         _messages
           ..clear()
-          ..addAll(messages);
+          ..addAll(restored.messages);
+        _applyRestoredStudyPlans(restored);
       });
 
       _scrollToBottom();
@@ -359,6 +373,7 @@ class _AiChatPageState extends State<AiChatPage> with WidgetsBindingObserver {
         _historyTimeout,
         'leer_historial',
       );
+      final restored = await _restoreStudyPlanHistory(messages);
       if (!mounted ||
           generation != _requestGeneration ||
           !_sessionController.isCurrentTicket(ticket) ||
@@ -370,7 +385,7 @@ class _AiChatPageState extends State<AiChatPage> with WidgetsBindingObserver {
       }
 
       final pending = _pendingSend;
-      final refreshed = List<AiChatMessage>.of(messages);
+      final refreshed = List<AiChatMessage>.of(restored.messages);
       if (fromHistory && pending != null) {
         final ids = refreshed.map((message) => message.id).toSet();
         for (final local in _messages) {
@@ -396,8 +411,6 @@ class _AiChatPageState extends State<AiChatPage> with WidgetsBindingObserver {
           }
         }
       }
-      if (unchanged) return;
-
       _aiService.iniciarConversacion(
         conversationId: conversation.id,
         history: refreshed,
@@ -406,8 +419,9 @@ class _AiChatPageState extends State<AiChatPage> with WidgetsBindingObserver {
         _messages
           ..clear()
           ..addAll(refreshed);
+        _applyRestoredStudyPlans(restored);
       });
-      _scrollToBottom();
+      if (!unchanged) _scrollToBottom();
     } catch (error) {
       debugPrint(
         'EducFlow AI history refresh error: '
@@ -421,23 +435,6 @@ class _AiChatPageState extends State<AiChatPage> with WidgetsBindingObserver {
   void _back() {
     HapticFeedback.selectionClick();
     MainNavigation.goTo(context, SeccionPrincipal.inicio);
-  }
-
-  void _openSchedule() {
-    MainNavigation.goTo(context, SeccionPrincipal.horario);
-  }
-
-  void _openCalendar() {
-    MainNavigation.goTo(context, SeccionPrincipal.calendario);
-  }
-
-  void _openNotifications() {
-    MainNavigation.goTo(context, SeccionPrincipal.notificaciones);
-  }
-
-  void _scrollToTop() {
-    _focusNode.unfocus();
-    scrollMainSectionToTop(context, _scrollController);
   }
 
   Future<void> _openHistory() async {
@@ -493,10 +490,11 @@ class _AiChatPageState extends State<AiChatPage> with WidgetsBindingObserver {
             _historyTimeout,
             'leer_historial',
           );
+          final restored = await _restoreStudyPlanHistory(messages);
 
           _aiService.iniciarConversacion(
             conversationId: active.id,
-            history: messages,
+            history: restored.messages,
           );
 
           if (!currentSession()) {
@@ -508,7 +506,8 @@ class _AiChatPageState extends State<AiChatPage> with WidgetsBindingObserver {
             _conversation = active;
             _messages
               ..clear()
-              ..addAll(messages);
+              ..addAll(restored.messages);
+            _applyRestoredStudyPlans(restored);
             _pendingSend = null;
             _lastFailedMessage = null;
           });
@@ -547,6 +546,7 @@ class _AiChatPageState extends State<AiChatPage> with WidgetsBindingObserver {
           ++_requestGeneration;
           _conversation = null;
           _messages.clear();
+          _clearStudyPlans();
           _pendingSend = null;
           _lastFailedMessage = null;
         });
@@ -564,11 +564,12 @@ class _AiChatPageState extends State<AiChatPage> with WidgetsBindingObserver {
         _historyTimeout,
         'leer_historial',
       );
+      final restored = await _restoreStudyPlanHistory(messages);
       if (!currentSession()) return;
 
       _aiService.iniciarConversacion(
         conversationId: resumed.id,
-        history: messages,
+        history: restored.messages,
       );
 
       setState(() {
@@ -576,7 +577,8 @@ class _AiChatPageState extends State<AiChatPage> with WidgetsBindingObserver {
         _conversation = resumed;
         _messages
           ..clear()
-          ..addAll(messages);
+          ..addAll(restored.messages);
+        _applyRestoredStudyPlans(restored);
         _pendingSend = null;
         _lastFailedMessage = null;
       });
@@ -685,6 +687,7 @@ class _AiChatPageState extends State<AiChatPage> with WidgetsBindingObserver {
       ++_requestGeneration;
       _conversation = null;
       _messages.clear();
+      _clearStudyPlans();
       _messageController.clear();
       _pendingSend = null;
       _lastFailedMessage = null;
@@ -794,12 +797,23 @@ class _AiChatPageState extends State<AiChatPage> with WidgetsBindingObserver {
       if (!isCurrent()) return;
       pending.response = response;
 
+      pending.planProposal ??= _aiService is AiStudyPlanProposalSource
+          ? (_aiService as AiStudyPlanProposalSource)
+                .tomarUltimaPropuestaPlanEstudio()
+          : null;
+      final storedResponse = pending.planProposal == null
+          ? response
+          : AiStudyPlanMessageCodec.encodeProposal(
+              response,
+              pending.planProposal!,
+            );
+
       stage = 'guardar_respuesta';
-      final AiChatMessage assistantMessage = await _awaitStage(
+      final AiChatMessage storedAssistantMessage = await _awaitStage(
         _historyService.addMessage(
           chatId: conversation.id,
           role: AiChatRole.assistant,
-          text: response,
+          text: storedResponse,
           messageId: pending.assistantMessageId,
           clearErrorMessageId: pending.errorMessageId,
         ),
@@ -807,10 +821,21 @@ class _AiChatPageState extends State<AiChatPage> with WidgetsBindingObserver {
         'guardar_respuesta',
       );
       if (!isCurrent()) return;
+      final decoded = AiStudyPlanMessageCodec.decode(
+        storedAssistantMessage.text,
+      );
+      final assistantMessage = storedAssistantMessage.copyWith(
+        text: decoded.visibleText,
+      );
+      final planProposal = pending.planProposal ?? decoded.proposal;
 
       setState(() {
         if (!_messages.any((message) => message.id == assistantMessage.id)) {
           _messages.add(assistantMessage);
+        }
+        if (planProposal != null) {
+          _studyPlansByMessage[assistantMessage.id] = planProposal;
+          _activeStudyPlanMessageId = assistantMessage.id;
         }
         _messages.removeWhere(
           (message) => message.id == pending.errorMessageId,
@@ -899,6 +924,7 @@ class _AiChatPageState extends State<AiChatPage> with WidgetsBindingObserver {
           setState(() {
             _conversation = null;
             _messages.clear();
+            _clearStudyPlans();
             _lastFailedMessage = null;
             _pendingSend = null;
             _sending = false;
@@ -965,9 +991,6 @@ class _AiChatPageState extends State<AiChatPage> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final bool dark = Theme.of(context).brightness == Brightness.dark;
-    final bool keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
-    final double safeBottom = MediaQuery.paddingOf(context).bottom;
-    final double navigationSpace = 76 + math.max(0.0, 16 - safeBottom);
 
     return Scaffold(
       resizeToAvoidBottomInset: true,
@@ -975,7 +998,7 @@ class _AiChatPageState extends State<AiChatPage> with WidgetsBindingObserver {
       body: Stack(
         children: [
           Positioned.fill(
-            bottom: keyboardVisible ? 0 : navigationSpace,
+            bottom: 0,
             child: SafeArea(
               bottom: false,
               child: Column(
@@ -1020,15 +1043,6 @@ class _AiChatPageState extends State<AiChatPage> with WidgetsBindingObserver {
               ),
             ),
           ),
-          if (!keyboardVisible)
-            MainBottomNav(
-              currentIndex: 2,
-              onHome: _back,
-              onSchedule: _openSchedule,
-              onAi: _scrollToTop,
-              onCalendar: _openCalendar,
-              onNotifications: _openNotifications,
-            ),
         ],
       ),
     );
@@ -1266,8 +1280,8 @@ class _AiChatPageState extends State<AiChatPage> with WidgetsBindingObserver {
 
                 Text(
                   _spanish
-                      ? 'Pregúntame por tus clases, tareas, evaluaciones o asignaturas.'
-                      : 'Ask me about your classes, tasks, evaluations or subjects.',
+                      ? 'Consulta tus clases, tareas, evaluaciones o asignaturas. Revisa siempre la información antes de tomar decisiones académicas.'
+                      : 'Ask about your classes, tasks, evaluations or subjects. Always review the information before making academic decisions.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: dark
@@ -1430,14 +1444,15 @@ class _AiChatPageState extends State<AiChatPage> with WidgetsBindingObserver {
           Expanded(
             child: message.isError
                 ? _buildErrorMessage(dark, message)
-                : _buildAiResponse(dark, message.text),
+                : _buildAiResponse(dark, message),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildAiResponse(bool dark, String text) {
+  Widget _buildAiResponse(bool dark, AiChatMessage message) {
+    final plan = _studyPlansByMessage[message.id];
     return Container(
       padding: const EdgeInsets.fromLTRB(15, 13, 15, 14),
       decoration: BoxDecoration(
@@ -1477,13 +1492,448 @@ class _AiChatPageState extends State<AiChatPage> with WidgetsBindingObserver {
           const SizedBox(height: 8),
 
           MarkdownBody(
-            data: text,
+            data: message.text,
             selectable: true,
             shrinkWrap: true,
             styleSheet: _markdownStyle(dark),
           ),
+          if (plan != null) ...[
+            const SizedBox(height: 13),
+            _buildStudyPlanCard(dark: dark, messageId: message.id, plan: plan),
+          ],
         ],
       ),
+    );
+  }
+
+  Widget _buildStudyPlanCard({
+    required bool dark,
+    required String messageId,
+    required PlanEstudioPropuesto plan,
+  }) {
+    final saving = _savingStudyPlans.contains(plan.id);
+    final saved = _savedStudyPlans.contains(plan.id);
+    final cancelled = _cancelledStudyPlans.contains(plan.id);
+    final active = _activeStudyPlanMessageId == messageId;
+    final superseded = !active && !saved && !cancelled;
+
+    return Container(
+      key: ValueKey('study-plan-${plan.id}'),
+      width: double.infinity,
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: dark ? const Color(0xFF202027) : const Color(0xFFF7F7FF),
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(
+          color: dark ? const Color(0xFF393946) : const Color(0xFFDCDDFB),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.auto_stories_outlined,
+                color: _primaryColor,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  plan.titulo,
+                  style: TextStyle(
+                    color: dark ? Colors.white : const Color(0xFF20223A),
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+              Text(
+                '${plan.sesiones.length} ${plan.sesiones.length == 1 ? 'sesión' : 'sesiones'}',
+                style: TextStyle(
+                  color: dark
+                      ? const Color(0xFFB8B9C8)
+                      : const Color(0xFF60647A),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            plan.asignaturaNombre,
+            style: const TextStyle(
+              color: _primaryColor,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 11),
+          for (var index = 0; index < plan.sesiones.length; index++) ...[
+            _buildStudySession(dark, plan.sesiones[index]),
+            if (index != plan.sesiones.length - 1)
+              const Divider(height: 17, thickness: 0.6),
+          ],
+          const SizedBox(height: 11),
+          if (saved)
+            _studyPlanStatus(
+              Icons.check_circle_outline_rounded,
+              _spanish ? 'Guardado en Calendario' : 'Saved to Calendar',
+              const Color(0xFF059669),
+            )
+          else if (cancelled)
+            _studyPlanStatus(
+              Icons.cancel_outlined,
+              _spanish ? 'Propuesta cancelada' : 'Proposal cancelled',
+              const Color(0xFFB45309),
+            )
+          else if (superseded)
+            _studyPlanStatus(
+              Icons.update_rounded,
+              _spanish
+                  ? 'Reemplazado por una versión posterior'
+                  : 'Replaced by a newer version',
+              const Color(0xFF6B7280),
+            )
+          else
+            Wrap(
+              spacing: 8,
+              runSpacing: 7,
+              children: [
+                OutlinedButton.icon(
+                  key: ValueKey('modify-study-plan-${plan.id}'),
+                  onPressed: saving
+                      ? null
+                      : () => _prepareStudyPlanModification(plan),
+                  icon: const Icon(Icons.edit_outlined, size: 17),
+                  label: Text(_spanish ? 'Modificar' : 'Modify'),
+                ),
+                FilledButton.icon(
+                  key: ValueKey('save-study-plan-${plan.id}'),
+                  onPressed: saving
+                      ? null
+                      : () => _saveStudyPlan(plan, messageId),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _primaryColor,
+                    foregroundColor: Colors.white,
+                  ),
+                  icon: saving
+                      ? const SizedBox.square(
+                          dimension: 15,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.calendar_month_outlined, size: 17),
+                  label: Text(_spanish ? 'Guardar' : 'Save'),
+                ),
+                TextButton(
+                  key: ValueKey('cancel-study-plan-${plan.id}'),
+                  onPressed: saving
+                      ? null
+                      : () => _cancelStudyPlan(plan, messageId),
+                  child: Text(_spanish ? 'Cancelar' : 'Cancel'),
+                ),
+              ],
+            ),
+          if (saved) ...[
+            const SizedBox(height: 7),
+            TextButton.icon(
+              key: ValueKey('open-calendar-study-plan-${plan.id}'),
+              onPressed: () =>
+                  MainNavigation.goTo(context, SeccionPrincipal.calendario),
+              icon: const Icon(Icons.open_in_new_rounded, size: 16),
+              label: Text(_spanish ? 'Ver Calendario' : 'View Calendar'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStudySession(bool dark, SesionPlanEstudio session) {
+    final date = MaterialLocalizations.of(context)
+        .formatMediumDate(session.fecha);
+    final end = TimeOfDay.fromDateTime(session.fin).format(context);
+    final start = TimeOfDay.fromDateTime(session.inicio).format(context);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 7,
+          height: 7,
+          margin: const EdgeInsets.only(top: 6),
+          decoration: const BoxDecoration(
+            color: _primaryColor,
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 9),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                session.titulo,
+                style: TextStyle(
+                  color: dark ? Colors.white : const Color(0xFF282A3D),
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12.5,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '$date · $start–$end · ${session.duracionMinutos} min',
+                style: TextStyle(
+                  color: dark
+                      ? const Color(0xFFAEB0BD)
+                      : const Color(0xFF666A7C),
+                  fontSize: 10.5,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                session.actividad,
+                style: TextStyle(
+                  color: dark
+                      ? const Color(0xFFC8CAD4)
+                      : const Color(0xFF4E5264),
+                  fontSize: 11.5,
+                  height: 1.35,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _studyPlanStatus(IconData icon, String text, Color color) => Row(
+    children: [
+      Icon(icon, color: color, size: 18),
+      const SizedBox(width: 7),
+      Expanded(
+        child: Text(
+          text,
+          style: TextStyle(
+            color: color,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    ],
+  );
+
+  void _prepareStudyPlanModification(PlanEstudioPropuesto plan) {
+    _messageController.text = _spanish
+        ? 'Quiero modificar este plan: '
+        : 'I want to modify this plan: ';
+    _messageController.selection = TextSelection.collapsed(
+      offset: _messageController.text.length,
+    );
+    _focusNode.requestFocus();
+  }
+
+  Future<void> _cancelStudyPlan(
+    PlanEstudioPropuesto plan,
+    String messageId,
+  ) async {
+    if (_savingStudyPlans.contains(plan.id)) return;
+    setState(() => _savingStudyPlans.add(plan.id));
+    try {
+      await _persistStudyPlanEvent(
+        plan: plan,
+        messageId: messageId,
+        state: AiStudyPlanEventState.cancelled,
+      );
+      if (!mounted) return;
+      (_aiService is AiStudyPlanProposalSource)
+          ? (_aiService as AiStudyPlanProposalSource).descartarPlanEstudio(
+              plan.id,
+            )
+          : null;
+      setState(() {
+        _savingStudyPlans.remove(plan.id);
+        _cancelledStudyPlans.add(plan.id);
+        if (_studyPlansByMessage[_activeStudyPlanMessageId]?.id == plan.id) {
+          _activeStudyPlanMessageId = null;
+        }
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _savingStudyPlans.remove(plan.id));
+      showAppStatusSnackBar(
+        context,
+        message: _spanish
+            ? 'No pude confirmar la cancelación. Revisa tu conexión e inténtalo nuevamente.'
+            : 'I could not confirm the cancellation. Check your connection and retry.',
+        type: AppStatusType.error,
+      );
+    }
+  }
+
+  Future<void> _saveStudyPlan(
+    PlanEstudioPropuesto plan,
+    String messageId,
+  ) async {
+    if (_savingStudyPlans.contains(plan.id) ||
+        _savedStudyPlans.contains(plan.id)) {
+      return;
+    }
+    setState(() => _savingStudyPlans.add(plan.id));
+    try {
+      final result = await _planEstudioPersistence.guardar(plan);
+      if (!mounted) return;
+      try {
+        await _persistStudyPlanEvent(
+          plan: plan,
+          messageId: messageId,
+          state: AiStudyPlanEventState.saved,
+        );
+      } catch (_) {
+        // Las tareas y sus marcadores siguen siendo la fuente de verdad. Si
+        // este evento falla, la recarga recupera el estado desde ellas.
+      }
+      if (!mounted) return;
+      (_aiService is AiStudyPlanProposalSource)
+          ? (_aiService as AiStudyPlanProposalSource).descartarPlanEstudio(
+              plan.id,
+            )
+          : null;
+      setState(() {
+        _savedStudyPlans.add(plan.id);
+        _savingStudyPlans.remove(plan.id);
+        if (_studyPlansByMessage[_activeStudyPlanMessageId]?.id == plan.id) {
+          _activeStudyPlanMessageId = null;
+        }
+      });
+      showAppStatusSnackBar(
+        context,
+        message: _spanish
+            ? '${result.total} sesiones confirmadas en el Calendario.'
+            : '${result.total} sessions confirmed in Calendar.',
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _savingStudyPlans.remove(plan.id));
+      showAppStatusSnackBar(
+        context,
+        message: _spanish
+            ? 'No se confirmó el plan completo. Puedes reintentar sin duplicar sesiones.'
+            : 'The complete plan was not confirmed. You can retry without duplicating sessions.',
+        type: AppStatusType.error,
+      );
+    }
+  }
+
+  Future<_RestoredStudyPlanHistory> _restoreStudyPlanHistory(
+    List<AiChatMessage> storedMessages,
+  ) async {
+    final visibleMessages = <AiChatMessage>[];
+    final plansByMessage = <String, PlanEstudioPropuesto>{};
+    final eventStates = <String, AiStudyPlanEventState>{};
+
+    for (final message in storedMessages) {
+      if (message.isUser || message.isError) {
+        visibleMessages.add(message);
+        continue;
+      }
+      final decoded = AiStudyPlanMessageCodec.decode(message.text);
+      final proposal = decoded.proposal;
+      if (proposal != null) plansByMessage[message.id] = proposal;
+      final event = decoded.event;
+      if (event != null) eventStates[event.planId] = event.state;
+      if (decoded.visibleText.trim().isNotEmpty) {
+        visibleMessages.add(message.copyWith(text: decoded.visibleText));
+      }
+    }
+
+    var savedPlans = eventStates.entries
+        .where((entry) => entry.value == AiStudyPlanEventState.saved)
+        .map((entry) => entry.key)
+        .toSet();
+    if (plansByMessage.isNotEmpty &&
+        _planEstudioPersistence is PlanEstudioStatusReader) {
+      try {
+        savedPlans = await (_planEstudioPersistence as PlanEstudioStatusReader)
+            .obtenerIdsPlanesGuardados();
+      } catch (_) {
+        // Si la lectura de tareas falla, el último evento cifrado confirmado
+        // conserva un estado seguro sin crear ni modificar actividades.
+      }
+    }
+
+    final cancelledPlans = eventStates.entries
+        .where(
+          (entry) =>
+              entry.value == AiStudyPlanEventState.cancelled &&
+              !savedPlans.contains(entry.key),
+        )
+        .map((entry) => entry.key)
+        .toSet();
+    String? activeMessageId;
+    for (final entry in plansByMessage.entries) {
+      if (!savedPlans.contains(entry.value.id) &&
+          !cancelledPlans.contains(entry.value.id)) {
+        activeMessageId = entry.key;
+      }
+    }
+    return _RestoredStudyPlanHistory(
+      messages: visibleMessages,
+      plansByMessage: plansByMessage,
+      savedPlans: savedPlans,
+      cancelledPlans: cancelledPlans,
+      activeMessageId: activeMessageId,
+    );
+  }
+
+  void _applyRestoredStudyPlans(_RestoredStudyPlanHistory restored) {
+    _studyPlansByMessage
+      ..clear()
+      ..addAll(restored.plansByMessage);
+    _savingStudyPlans.clear();
+    _savedStudyPlans
+      ..clear()
+      ..addAll(restored.savedPlans);
+    _cancelledStudyPlans
+      ..clear()
+      ..addAll(restored.cancelledPlans);
+    _activeStudyPlanMessageId = restored.activeMessageId;
+  }
+
+  void _clearStudyPlans() {
+    _studyPlansByMessage.clear();
+    _savingStudyPlans.clear();
+    _savedStudyPlans.clear();
+    _cancelledStudyPlans.clear();
+    _activeStudyPlanMessageId = null;
+  }
+
+  Future<void> _persistStudyPlanEvent({
+    required PlanEstudioPropuesto plan,
+    required String messageId,
+    required AiStudyPlanEventState state,
+  }) async {
+    final conversation = _conversation;
+    if (conversation == null) throw StateError('No existe un chat activo.');
+    await _awaitStage(
+      _historyService.addMessage(
+        chatId: conversation.id,
+        role: AiChatRole.assistant,
+        text: AiStudyPlanMessageCodec.encodeEvent(
+          messageId: messageId,
+          planId: plan.id,
+          state: state,
+        ),
+        messageId: '${messageId}_plan_${state.name}',
+      ),
+      _messageWriteTimeout,
+      'guardar_estado_plan',
     );
   }
 
@@ -1854,7 +2304,24 @@ class _AiPendingSend {
   final String assistantMessageId;
   final String errorMessageId;
   String? response;
+  PlanEstudioPropuesto? planProposal;
   int attempts = 0;
+}
+
+class _RestoredStudyPlanHistory {
+  const _RestoredStudyPlanHistory({
+    required this.messages,
+    required this.plansByMessage,
+    required this.savedPlans,
+    required this.cancelledPlans,
+    required this.activeMessageId,
+  });
+
+  final List<AiChatMessage> messages;
+  final Map<String, PlanEstudioPropuesto> plansByMessage;
+  final Set<String> savedPlans;
+  final Set<String> cancelledPlans;
+  final String? activeMessageId;
 }
 
 class _TinyThinkingDots extends StatefulWidget {
