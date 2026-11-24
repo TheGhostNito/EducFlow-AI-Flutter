@@ -24,6 +24,8 @@ android {
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
+    flavorDimensions += "environment"
+
     compileOptions {
         isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
@@ -38,6 +40,18 @@ android {
 
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+    }
+
+    productFlavors {
+        create("production") {
+            dimension = "environment"
+            applicationId = "com.martinrozas.eduflowai"
+        }
+        create("validation") {
+            dimension = "environment"
+            applicationId = "com.martinrozas.eduflowai.testing"
+            versionNameSuffix = "-testing"
+        }
     }
 
     signingConfigs {

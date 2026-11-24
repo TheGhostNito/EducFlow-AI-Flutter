@@ -2,21 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:ionicons/ionicons.dart';
 
-import '../../core/navigation/main_navigation.dart';
-
 import '../../models/asignatura.dart';
 import '../../models/evaluacion.dart';
+import '../../models/periodo_academico.dart';
+import '../../models/sesion_clase.dart';
 import '../../models/tarea.dart';
 import '../../services/asignaturas_service.dart';
 import '../../services/evaluaciones_service.dart';
+import '../../services/ocurrencias_clase_service.dart';
+import '../../services/periodos_academicos_service.dart';
+import '../../services/sesiones_clase_service.dart';
 import '../../services/tareas_service.dart';
+import '../../services/study_plan_task_metadata.dart';
 import '../../services/time_format_service.dart';
 import '../../services/translation_service.dart';
 import '../../widgets/app_pressable.dart';
 import '../../widgets/app_reveal.dart';
 import '../../widgets/app_scroll_header.dart';
-import '../../widgets/main_bottom_nav.dart';
-import '../../widgets/main_section_scroll.dart';
 import '../tasks/widgets/task_edit_sheet.dart';
 import 'widgets/calendar_add_sheet.dart';
 import '../tasks/widgets/task_detail_sheet.dart';
@@ -51,6 +53,14 @@ class _CalendarPageState extends State<CalendarPage> {
 
   final AsignaturasService _asignaturasService = AsignaturasService.instance;
 
+  final PeriodosAcademicosService _periodosService =
+      PeriodosAcademicosService();
+
+  final SesionesClaseService _sesionesService = SesionesClaseService();
+
+  final OcurrenciasClaseService _ocurrenciasService =
+      const OcurrenciasClaseService();
+
   final TareasService _tareasService = TareasService.instance;
 
   final EvaluacionesService _evaluacionesService = EvaluacionesService.instance;
@@ -71,6 +81,8 @@ class _CalendarPageState extends State<CalendarPage> {
   PerfilUsuario? _perfil;
 
   List<Asignatura> _asignaturas = [];
+  List<PeriodoAcademico> _periodos = [];
+  List<SesionClase> _sesiones = [];
   List<Tarea> _tareas = [];
   List<Evaluacion> _evaluaciones = [];
 
@@ -190,13 +202,34 @@ class _CalendarPageState extends State<CalendarPage> {
         _evaluacionesService.obtenerTodas(),
       ]);
 
+      final asignaturas = resultados[1] as List<Asignatura>;
+      final bool requiereDatosAcademicos = asignaturas.any(
+        (asignatura) =>
+            asignatura.periodoAcademicoId?.trim().isNotEmpty == true,
+      );
+      final List<PeriodoAcademico> periodos;
+      final List<SesionClase> sesiones;
+      if (requiereDatosAcademicos) {
+        final complementos = await Future.wait([
+          _periodosService.obtenerTodos(),
+          _sesionesService.obtenerTodas(),
+        ]);
+        periodos = complementos[0] as List<PeriodoAcademico>;
+        sesiones = complementos[1] as List<SesionClase>;
+      } else {
+        periodos = const [];
+        sesiones = const [];
+      }
+
       if (!mounted) {
         return;
       }
 
       setState(() {
         _perfil = resultados[0] as PerfilUsuario?;
-        _asignaturas = resultados[1] as List<Asignatura>;
+        _asignaturas = asignaturas;
+        _periodos = periodos;
+        _sesiones = sesiones;
         _tareas = resultados[2] as List<Tarea>;
         _evaluaciones = resultados[3] as List<Evaluacion>;
         _error = false;
@@ -490,81 +523,36 @@ class _CalendarPageState extends State<CalendarPage> {
   // CLASES / TAREAS DEL DÍA
   // =========================================================
 
-  DiaSemana? _diaSemanaModelo(int weekday) {
-    switch (weekday) {
-      case DateTime.monday:
-        return DiaSemana.lunes;
-
-      case DateTime.tuesday:
-        return DiaSemana.martes;
-
-      case DateTime.wednesday:
-        return DiaSemana.miercoles;
-
-      case DateTime.thursday:
-        return DiaSemana.jueves;
-
-      case DateTime.friday:
-        return DiaSemana.viernes;
-
-      case DateTime.saturday:
-        return DiaSemana.sabado;
-
-      case DateTime.sunday:
-        return null;
-    }
-
-    return null;
-  }
-
   List<_CalendarItem> _elementosFecha(DateTime fecha) {
     final List<_CalendarItem> items = [];
 
-    final DiaSemana? dia = _diaSemanaModelo(fecha.weekday);
-
-    if (dia != null) {
-      for (final Asignatura asignatura in _asignaturas) {
-        for (
-          int blockIndex = 0;
-          blockIndex < asignatura.horario.length;
-          blockIndex++
-        ) {
-          final BloqueHorario bloque = asignatura.horario[blockIndex];
-
-          if (bloque.dia != dia) {
-            continue;
-          }
-
-          final String salaBloque = bloque.sala?.trim() ?? '';
-
-          final String salaAsignatura = asignatura.sala?.trim() ?? '';
-
-          final String sala = salaBloque.isNotEmpty
-              ? salaBloque
-              : salaAsignatura;
-
-          final String profesor = asignatura.profesor?.trim() ?? '';
-
-          final List<String> detalles = [];
-
-          if (profesor.isNotEmpty) {
-            detalles.add(profesor);
-          }
-
-          if (sala.isNotEmpty) {
-            detalles.add(sala);
-          }
-
-          items.add(
-            _CalendarItem.clase(
-              asignatura: asignatura,
-              bloque: bloque,
-              blockIndex: blockIndex,
-              detalles: detalles.join(' · '),
-            ),
-          );
-        }
-      }
+    final ocurrencias = _ocurrenciasService.obtenerParaFecha(
+      fecha: fecha,
+      asignaturas: _asignaturas,
+      periodos: _periodos,
+      sesiones: _sesiones,
+    );
+    for (final ocurrencia in ocurrencias) {
+      final profesor = ocurrencia.asignatura.profesor?.trim() ?? '';
+      final sala = ocurrencia.sala?.trim() ?? '';
+      final blockIndex = ocurrencia.bloqueIndex;
+      items.add(
+        _CalendarItem.clase(
+          asignatura: ocurrencia.asignatura,
+          horaInicio: ocurrencia.horaInicio,
+          horaFin: ocurrencia.horaFin,
+          sala: ocurrencia.sala,
+          bloque: blockIndex == null
+              ? null
+              : ocurrencia.asignatura.horario[blockIndex],
+          blockIndex: blockIndex,
+          esProvisional: ocurrencia.esProvisional,
+          detalles: <String>[
+            if (profesor.isNotEmpty) profesor,
+            if (sala.isNotEmpty) sala,
+          ].join(' · '),
+        ),
+      );
     }
 
     for (final Tarea tarea in _tareas) {
@@ -785,6 +773,24 @@ class _CalendarPageState extends State<CalendarPage> {
   }
 
   String _estadoTemporalTarea(Tarea tarea) {
+    if (StudyPlanTaskMetadata.isStudySession(tarea)) {
+      if (tarea.completada) {
+        return _espanol ? 'SESIÓN COMPLETADA' : 'SESSION COMPLETED';
+      }
+      final fecha = tarea.fechaEntrega;
+      if (fecha != null) {
+        final ahora = DateTime.now();
+        final diferencia = DateTime(
+          fecha.year,
+          fecha.month,
+          fecha.day,
+        ).difference(DateTime(ahora.year, ahora.month, ahora.day)).inDays;
+        if (diferencia == 0) {
+          return _espanol ? 'SESIÓN DE HOY' : 'TODAY\'S SESSION';
+        }
+      }
+      return _espanol ? 'SESIÓN PROGRAMADA' : 'SESSION SCHEDULED';
+    }
     if (tarea.completada) {
       return _espanol ? 'COMPLETADA' : 'COMPLETED';
     }
@@ -819,6 +825,9 @@ class _CalendarPageState extends State<CalendarPage> {
   }
 
   Color _colorEstadoTemporalTarea(Tarea tarea) {
+    if (StudyPlanTaskMetadata.isStudySession(tarea)) {
+      return tarea.completada ? const Color(0xFF059669) : _primaryColor;
+    }
     if (tarea.completada) {
       return const Color(0xFF059669);
     }
@@ -1185,6 +1194,7 @@ class _CalendarPageState extends State<CalendarPage> {
       semestreMalla: asignatura.semestreMalla,
       cursoNivel: asignatura.cursoNivel,
       anioAcademico: asignatura.anioAcademico,
+      periodoAcademicoId: asignatura.periodoAcademicoId,
       modalidad: asignatura.modalidad,
       lugar: asignatura.lugar,
       institucion: asignatura.institucion,
@@ -1257,40 +1267,10 @@ class _CalendarPageState extends State<CalendarPage> {
     }
   }
 
-  // =========================================================
-  // NAVEGACIÓN INFERIOR
-  // =========================================================
-
-  void _volverInicio() {
-    HapticFeedback.selectionClick();
-    MainNavigation.goTo(context, SeccionPrincipal.inicio);
-  }
-
-  void _volverArriba() {
-    scrollMainSectionToTop(context, _scrollController);
-  }
-
-  void _abrirIA() {
-    HapticFeedback.selectionClick();
-    MainNavigation.goTo(context, SeccionPrincipal.ia);
-  }
-
-  void _abrirHorario() {
-    HapticFeedback.selectionClick();
-    MainNavigation.goTo(context, SeccionPrincipal.horario);
-  }
-
-  void _abrirNotificaciones() {
-    HapticFeedback.selectionClick();
-    MainNavigation.goTo(context, SeccionPrincipal.notificaciones);
-  }
-
   Future<void> _abrirClaseCalendario(_CalendarItem item) async {
     final Asignatura? asignatura = item.asignatura;
 
-    final BloqueHorario? bloque = item.bloque;
-
-    if (asignatura == null || bloque == null) {
+    if (asignatura == null || item.horaInicio == null || item.horaFin == null) {
       return;
     }
 
@@ -1300,7 +1280,10 @@ class _CalendarPageState extends State<CalendarPage> {
         await showCalendarClassDetailSheet(
           context: context,
           subject: asignatura,
-          block: bloque,
+          startTime: item.horaInicio!,
+          endTime: item.horaFin!,
+          room: item.sala,
+          editable: item.bloque != null && item.blockIndex != null,
           spanish: _espanol,
         );
 
@@ -1952,15 +1935,6 @@ class _CalendarPageState extends State<CalendarPage> {
               title: _espanol ? 'Calendario' : 'Calendar',
               trailing: _buildCompactAddButton(oscuro),
             ),
-          ),
-
-          MainBottomNav(
-            currentIndex: 3,
-            onHome: _volverInicio,
-            onSchedule: _abrirHorario,
-            onAi: _abrirIA,
-            onCalendar: _volverArriba,
-            onNotifications: _abrirNotificaciones,
           ),
         ],
       ),
@@ -2695,7 +2669,11 @@ class _CalendarPageState extends State<CalendarPage> {
                   children: [
                     if (esClase)
                       Text(
-                        _espanol ? 'CLASE' : 'CLASS',
+                        item.esProvisional
+                            ? (_espanol
+                                  ? 'CLASE · PERÍODO PROVISIONAL'
+                                  : 'CLASS · PROVISIONAL PERIOD')
+                            : (_espanol ? 'CLASE' : 'CLASS'),
                         style: const TextStyle(
                           color: _classColor,
                           fontSize: 9,
@@ -3010,26 +2988,34 @@ class _CalendarItem {
     this.asignatura,
     this.bloque,
     this.blockIndex,
+    this.sala,
     this.tarea,
     this.evaluacion,
+    this.esProvisional = false,
   });
 
   factory _CalendarItem.clase({
     required Asignatura asignatura,
-    required BloqueHorario bloque,
-    required int blockIndex,
+    required String horaInicio,
+    required String horaFin,
+    required String? sala,
+    required BloqueHorario? bloque,
+    required int? blockIndex,
     required String detalles,
+    bool esProvisional = false,
   }) {
     return _CalendarItem._(
       tipo: _CalendarItemType.clase,
       titulo: asignatura.nombre,
       detalles: detalles,
-      horaInicio: bloque.horaInicio,
-      horaFin: bloque.horaFin,
-      horaOrden: bloque.horaInicio,
+      horaInicio: horaInicio,
+      horaFin: horaFin,
+      horaOrden: horaInicio,
       asignatura: asignatura,
       bloque: bloque,
       blockIndex: blockIndex,
+      sala: sala,
+      esProvisional: esProvisional,
     );
   }
 
@@ -3083,6 +3069,8 @@ class _CalendarItem {
   final Asignatura? asignatura;
   final BloqueHorario? bloque;
   final int? blockIndex;
+  final String? sala;
   final Tarea? tarea;
   final Evaluacion? evaluacion;
+  final bool esProvisional;
 }

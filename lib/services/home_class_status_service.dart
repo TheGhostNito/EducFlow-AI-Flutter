@@ -1,4 +1,7 @@
 import '../models/asignatura.dart';
+import '../models/periodo_academico.dart';
+import '../models/sesion_clase.dart';
+import 'ocurrencias_clase_service.dart';
 
 class HomeClassEntry {
   const HomeClassEntry({
@@ -26,42 +29,40 @@ class HomeClassStatus {
 }
 
 class HomeClassStatusService {
-  const HomeClassStatusService();
+  const HomeClassStatusService({
+    this.ocurrenciasService = const OcurrenciasClaseService(),
+  });
+
+  final OcurrenciasClaseService ocurrenciasService;
 
   List<HomeClassEntry> classesForDay(
     List<Asignatura> subjects, {
     required DateTime date,
     required String missingRoomLabel,
     required String missingTeacherLabel,
+    List<PeriodoAcademico> periodos = const [],
+    List<SesionClase> sesiones = const [],
   }) {
-    final DiaSemana? weekday = _weekday(date.weekday);
-    if (weekday == null) return const [];
-
-    final List<HomeClassEntry> classes = [];
-    for (final Asignatura subject in subjects) {
-      for (final BloqueHorario block in subject.horario) {
-        if (block.dia != weekday) continue;
-
-        final String blockRoom = block.sala?.trim() ?? '';
-        final String subjectRoom = subject.sala?.trim() ?? '';
-        final String teacher = subject.profesor?.trim() ?? '';
-
-        classes.add(
-          HomeClassEntry(
-            asignaturaId: subject.id,
-            nombre: subject.nombre,
-            sala: blockRoom.isNotEmpty
-                ? blockRoom
-                : subjectRoom.isNotEmpty
-                ? subjectRoom
-                : missingRoomLabel,
+    final classes = ocurrenciasService
+        .obtenerParaFecha(
+          fecha: date,
+          asignaturas: subjects,
+          periodos: periodos,
+          sesiones: sesiones,
+        )
+        .map((ocurrencia) {
+          final teacher = ocurrencia.asignatura.profesor?.trim() ?? '';
+          final room = ocurrencia.sala?.trim() ?? '';
+          return HomeClassEntry(
+            asignaturaId: ocurrencia.asignatura.id,
+            nombre: ocurrencia.asignatura.nombre,
+            sala: room.isNotEmpty ? room : missingRoomLabel,
             profesor: teacher.isNotEmpty ? teacher : missingTeacherLabel,
-            horaInicio: block.horaInicio,
-            horaFin: block.horaFin,
-          ),
-        );
-      }
-    }
+            horaInicio: ocurrencia.horaInicio,
+            horaFin: ocurrencia.horaFin,
+          );
+        })
+        .toList();
 
     classes.sort((a, b) {
       final int aStart = _timeInMinutes(a.horaInicio) ?? 24 * 60;
@@ -112,17 +113,5 @@ class HomeClassStatusService {
       return null;
     }
     return hour * 60 + minute;
-  }
-
-  DiaSemana? _weekday(int weekday) {
-    return switch (weekday) {
-      DateTime.monday => DiaSemana.lunes,
-      DateTime.tuesday => DiaSemana.martes,
-      DateTime.wednesday => DiaSemana.miercoles,
-      DateTime.thursday => DiaSemana.jueves,
-      DateTime.friday => DiaSemana.viernes,
-      DateTime.saturday => DiaSemana.sabado,
-      _ => null,
-    };
   }
 }

@@ -10,7 +10,10 @@ enum CalendarClassDetailAction { edit, viewSubject }
 Future<CalendarClassDetailAction?> showCalendarClassDetailSheet({
   required BuildContext context,
   required Asignatura subject,
-  required BloqueHorario block,
+  required String startTime,
+  required String endTime,
+  required String? room,
+  required bool editable,
   required bool spanish,
 }) {
   return showModalBottomSheet<CalendarClassDetailAction>(
@@ -22,7 +25,10 @@ Future<CalendarClassDetailAction?> showCalendarClassDetailSheet({
     builder: (_) {
       return _CalendarClassDetailSheet(
         subject: subject,
-        block: block,
+        startTime: startTime,
+        endTime: endTime,
+        room: room,
+        editable: editable,
         spanish: spanish,
       );
     },
@@ -32,19 +38,25 @@ Future<CalendarClassDetailAction?> showCalendarClassDetailSheet({
 class _CalendarClassDetailSheet extends StatelessWidget {
   const _CalendarClassDetailSheet({
     required this.subject,
-    required this.block,
+    required this.startTime,
+    required this.endTime,
+    required this.room,
+    required this.editable,
     required this.spanish,
   });
 
   final Asignatura subject;
-  final BloqueHorario block;
+  final String startTime;
+  final String endTime;
+  final String? room;
+  final bool editable;
   final bool spanish;
 
   static const Color _primaryColor = Color(0xFF5B5FEF);
   static const Color _classColor = Color(0xFF3B82F6);
 
   String _room() {
-    final String blockRoom = block.sala?.trim() ?? '';
+    final String blockRoom = room?.trim() ?? '';
 
     if (blockRoom.isNotEmpty) {
       return blockRoom;
@@ -74,12 +86,9 @@ class _CalendarClassDetailSheet extends StatelessWidget {
     final bool dark = Theme.of(context).brightness == Brightness.dark;
     final TimeFormatService timeService = TimeFormatService.instance;
 
-    final String start = timeService.formatStoredTime(
-      context,
-      block.horaInicio,
-    );
+    final String start = timeService.formatStoredTime(context, startTime);
 
-    final String end = timeService.formatStoredTime(context, block.horaFin);
+    final String end = timeService.formatStoredTime(context, endTime);
 
     return Container(
       width: double.infinity,
@@ -204,24 +213,27 @@ class _CalendarClassDetailSheet extends StatelessWidget {
           const SizedBox(height: 18),
           Row(
             children: [
-              Expanded(
-                child: SizedBox(
-                  height: 49,
-                  child: OutlinedButton.icon(
-                    onPressed: () {
-                      HapticFeedback.selectionClick();
+              if (editable) ...[
+                Expanded(
+                  child: SizedBox(
+                    height: 49,
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        HapticFeedback.selectionClick();
 
-                      Navigator.of(context).pop(CalendarClassDetailAction.edit);
-                    },
-                    icon: const Icon(Icons.edit_outlined, size: 18),
-                    label: Text(
-                      spanish ? 'Editar clase' : 'Edit class',
-                      style: const TextStyle(fontWeight: FontWeight.w700),
+                        Navigator.of(context)
+                            .pop(CalendarClassDetailAction.edit);
+                      },
+                      icon: const Icon(Icons.edit_outlined, size: 18),
+                      label: Text(
+                        spanish ? 'Editar clase' : 'Edit class',
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 10),
+                const SizedBox(width: 10),
+              ],
               Expanded(
                 child: SizedBox(
                   height: 49,

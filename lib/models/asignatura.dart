@@ -263,6 +263,7 @@ class Asignatura {
     this.correoProfesor,
     this.sala,
     this.periodo,
+    this.periodoAcademicoId,
     this.horario = const [],
     this.sigla,
     this.seccion,
@@ -292,6 +293,13 @@ class Asignatura {
   final String? sala;
 
   final String? periodo;
+
+  /// Identificador del período académico al que pertenece la asignatura.
+  ///
+  /// Es opcional para mantener el comportamiento de las asignaturas heredadas,
+  /// cuyos bloques continúan interpretándose como semanales sin vigencia.
+  /// La persistencia de este campo se incorporará en una fase posterior.
+  final String? periodoAcademicoId;
 
   final List<BloqueHorario> horario;
 

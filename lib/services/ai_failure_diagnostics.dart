@@ -275,30 +275,30 @@ class AiFailureDiagnostics {
     }
     if (category == AiFailureCategory.quotaExceeded) {
       return spanish
-          ? 'Se alcanzó temporalmente la cuota de Gemini. Las consultas directas sobre tus datos académicos siguen disponibles; intenta nuevamente más tarde para preguntas que requieren IA.'
-          : 'The Gemini quota has been temporarily reached. Direct queries about your academic data are still available; try again later for questions that require AI.';
+          ? 'Se alcanzó temporalmente la cuota del asistente de IA. Las consultas directas sobre tus datos académicos siguen disponibles; intenta nuevamente más tarde para preguntas que requieren IA.'
+          : 'The AI assistant quota has been temporarily reached. Direct queries about your academic data remain available; try again later for questions that require AI.';
     }
     if (category == AiFailureCategory.connectivity) {
       return spanish
-          ? 'No pude conectar con Gemini. Revisa tu conexión e inténtalo nuevamente.'
-          : 'I could not connect to Gemini. Check your connection and try again.';
+          ? 'No pude conectar con el asistente de IA. Revisa tu conexión e inténtalo nuevamente.'
+          : 'I could not connect to the AI assistant. Check your connection and try again.';
     }
     if (category == AiFailureCategory.appCheck) {
       return spanish
-          ? 'Firebase rechazó la verificación de esta instalación. La configuración de App Check debe revisarse.'
-          : 'Firebase rejected this app installation verification. The App Check configuration needs to be reviewed.';
+          ? 'No pudimos verificar esta instalación de EducFlow AI. Actualiza la aplicación o inténtalo nuevamente.'
+          : 'We could not verify this EducFlow AI installation. Update the app or try again.';
     }
     if (category == AiFailureCategory.modelUnavailable) {
       return spanish
-          ? 'El modelo de Gemini configurado no está disponible para este proyecto.'
-          : 'The configured Gemini model is not available for this project.';
+          ? 'El asistente de IA no está disponible temporalmente.'
+          : 'The AI assistant is temporarily unavailable.';
     }
     if (category == AiFailureCategory.invalidApiKey ||
         category == AiFailureCategory.permissionDenied ||
         category == AiFailureCategory.serviceNotEnabled) {
       return spanish
-          ? 'Firebase AI Logic rechazó la configuración o los permisos de la aplicación.'
-          : 'Firebase AI Logic rejected the app configuration or permissions.';
+          ? 'El asistente de IA no pudo validar el acceso de la aplicación.'
+          : 'The AI assistant could not validate the app access.';
     }
     return spanish
         ? 'No pude responder en este momento. Inténtalo nuevamente.'

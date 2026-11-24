@@ -26,7 +26,16 @@ flutter run -d <device-id>
 
 El código actual no exige variables de entorno para iniciar Flutter: los identificadores y claves publicables están en la configuración cliente. El backend depende de configuración externa: Firebase Authentication, App Check, políticas de Storage para `ocr-temp`, funciones `ocr-process` y `chat-crypto`, secretos de cifrado de chat, y esquema/RLS de Supabase. No se documentan aquí valores secretos. La importación OCR usa el bucket `ocr-temp`.
 
-El cliente productivo invoca `ocr-process`, pero el código fuente de esa Edge Function v2.2 y su configuración de Google Cloud Vision no están versionados en este repositorio. Por ello, un clon puede compilar el cliente, pero no reconstruir ni desplegar el procesamiento OCR del backend solo desde GitHub. La función desplegada y sus dependencias deben recuperarse y verificarse por separado antes de preparar un entorno nuevo.
+El cliente productivo invoca `ocr-process`. La fuente de referencia recuperada se conserva en `supabase/functions/ocr-process/`, pero su presencia local no sustituye la comparación con la versión desplegada ni la verificación de secretos de Google Cloud Vision, identidad Firebase y cuotas del entorno remoto.
+
+`config/ocr_integrated_production.json` habilita en una misma compilación la persistencia multimodal de mallas, la importación atómica de horarios y los documentos originales. No habilita muestras ni diagnósticos. Se usa igual en Android y Web:
+
+```sh
+flutter build apk --release --flavor production --dart-define-from-file=config/ocr_integrated_production.json
+flutter build web --release --dart-define-from-file=config/ocr_integrated_production.json
+```
+
+Los flags del cliente no omiten los controles del backend. Toda cuenta Firebase válida con rol `authenticated` puede importar horarios automáticamente; el UID se deriva del JWT y la tabla administrativa se conserva únicamente para bloqueos excepcionales, temporales o permanentes. Ambos OCR mantienen autenticación Firebase, aislamiento por UID, RLS, cuotas y validación del proyecto esperado. Para Testing, copie `config/android_testing.example.json` a `config/android_testing.local.json`, complete únicamente la clave publicable y compile el flavor `validation`. El entorno Testing está limitado deliberadamente a Android.
 
 La entrada `lib/testing/` y el proyecto `testing_runner/` son laboratorios locales separados de `lib/main.dart` y se excluyen del conjunto productivo.
 

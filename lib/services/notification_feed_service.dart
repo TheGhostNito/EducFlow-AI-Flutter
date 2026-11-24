@@ -2,6 +2,7 @@ import '../models/asignatura.dart';
 import '../models/evaluacion.dart';
 import '../models/notificacion_app.dart';
 import '../models/tarea.dart';
+import 'study_plan_task_metadata.dart';
 
 class NotificationFeedService {
   NotificationFeedService._();
@@ -77,6 +78,10 @@ class NotificationFeedService {
     final List<NotificacionApp> resultado = [];
 
     for (final Asignatura asignatura in asignaturas) {
+      // Las asignaturas con período requieren resolver vigencia y sesiones.
+      // Hasta integrar ese contexto en este servicio, se omiten para no emitir
+      // avisos de períodos históricos como si fueran clases actuales.
+      if (asignatura.periodoAcademicoId?.trim().isNotEmpty == true) continue;
       for (int index = 0; index < asignatura.horario.length; index++) {
         final BloqueHorario bloque = asignatura.horario[index];
 
@@ -208,7 +213,22 @@ class NotificationFeedService {
 
       late final String titulo;
 
-      if (vencida) {
+      final studySession = StudyPlanTaskMetadata.isStudySession(tarea);
+      if (studySession && diferencia < 0) {
+        titulo = spanish
+            ? 'Sesión de estudio pendiente'
+            : 'Pending study session';
+      } else if (studySession && diferencia == 0) {
+        titulo = spanish ? 'Sesión de estudio hoy' : 'Study session today';
+      } else if (studySession && diferencia == 1) {
+        titulo = spanish
+            ? 'Sesión de estudio mañana'
+            : 'Study session tomorrow';
+      } else if (studySession) {
+        titulo = spanish
+            ? 'Sesión de estudio programada'
+            : 'Scheduled study session';
+      } else if (vencida) {
         titulo = spanish ? 'Tarea vencida' : 'Overdue task';
       } else if (diferencia == 0) {
         titulo = spanish ? 'Tarea vence hoy' : 'Task due today';
@@ -236,7 +256,7 @@ class NotificationFeedService {
         NotificacionApp(
           id: 'tarea-${tarea.id}',
           tipo: TipoNotificacionApp.tarea,
-          grupo: vencida
+          grupo: vencida && !studySession
               ? GrupoNotificacionApp.anterior
               : GrupoNotificacionApp.reciente,
           titulo: titulo,

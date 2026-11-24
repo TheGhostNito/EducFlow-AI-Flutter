@@ -1,0 +1,23 @@
+-- Protocolo manual y reversible de concurrencia para dos sesiones SQL de
+-- Supabase Testing. No ejecutar este archivo completo: copiar cada bloque en
+-- la sesión indicada. Ambas sesiones terminan con ROLLBACK.
+
+-- SESIÓN A
+-- begin;
+-- select * from public.reserve_ocr_vision_usage(
+--   'ocr_concurrency_validation_user', 4, 1000000, 5
+-- );
+-- select pg_catalog.pg_sleep(10);
+-- rollback;
+
+-- SESIÓN B (iniciar mientras A está en pg_sleep)
+-- begin;
+-- set local statement_timeout = '15s';
+-- select * from public.reserve_ocr_vision_usage(
+--   'ocr_concurrency_validation_user', 4, 1000000, 5
+-- );
+-- rollback;
+-- Resultado esperado: B permanece esperando mientras A conserva los bloqueos.
+-- Después del ROLLBACK de A, B responde allowed=true, daily_used=4 y luego
+-- revierte sus propias escrituras. La prueba funcional separada comprueba que
+-- una reserva ya confirmada produciría daily_limit sin incrementar contadores.

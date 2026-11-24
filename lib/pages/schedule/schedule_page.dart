@@ -2,21 +2,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:ionicons/ionicons.dart';
 
-import '../../core/navigation/main_navigation.dart';
-
 import '../../core/auth/auth_service.dart';
+import '../../core/config/developer_tools_config.dart';
 import '../../models/asignatura.dart';
+import '../../models/periodo_academico.dart';
 import '../../models/perfil_usuario.dart';
+import '../../models/sesion_clase.dart';
 import '../../services/asignaturas_service.dart';
+import '../../services/ocurrencias_clase_service.dart';
 import '../../services/perfil_service.dart';
+import '../../services/periodos_academicos_service.dart';
+import '../../services/sesiones_clase_service.dart';
 import '../../services/translation_service.dart';
 import '../../widgets/app_pressable.dart';
 import '../../widgets/app_reveal.dart';
 import '../../widgets/app_scroll_header.dart';
-import '../../widgets/main_bottom_nav.dart';
-import '../../widgets/main_section_scroll.dart';
 import '../subjects/subject_detail_page.dart';
 import '../subjects/subjects_page.dart';
+import 'horario_ocr_diagnostic_page.dart';
 import 'widgets/schedule_class_edit_sheet.dart';
 import '../../services/horario_conflict_service.dart';
 import '../../services/time_format_service.dart';
@@ -46,6 +49,14 @@ class _SchedulePageState extends State<SchedulePage> {
 
   final AsignaturasService _asignaturasService = AsignaturasService.instance;
 
+  final PeriodosAcademicosService _periodosService =
+      PeriodosAcademicosService();
+
+  final SesionesClaseService _sesionesService = SesionesClaseService();
+
+  final OcurrenciasClaseService _ocurrenciasService =
+      const OcurrenciasClaseService();
+
   final TranslationService _translationService = TranslationService.instance;
 
   final ScrollController _scrollController = ScrollController();
@@ -58,6 +69,8 @@ class _SchedulePageState extends State<SchedulePage> {
   PerfilUsuario? _perfil;
 
   List<Asignatura> _asignaturas = [];
+  List<PeriodoAcademico> _periodos = [];
+  List<SesionClase> _sesiones = [];
 
   bool _cargando = true;
   bool _error = false;
@@ -79,14 +92,19 @@ class _SchedulePageState extends State<SchedulePage> {
 
   List<Asignatura> get _asignaturasPendientes {
     return _asignaturas
-        .where((asignatura) => asignatura.horario.isEmpty)
+        .where(
+          (asignatura) =>
+              asignatura.horario.isEmpty &&
+              !_sesiones.any((sesion) => sesion.asignaturaId == asignatura.id),
+        )
         .toList();
   }
 
   bool get _tieneAsignaturas => _asignaturas.isNotEmpty;
 
   bool get _tieneAlgunHorario {
-    return _asignaturas.any((asignatura) => asignatura.horario.isNotEmpty);
+    return _asignaturas.any((asignatura) => asignatura.horario.isNotEmpty) ||
+        _sesiones.isNotEmpty;
   }
 
   List<_ScheduleDay> get _diasVisibles {
@@ -116,7 +134,9 @@ class _SchedulePageState extends State<SchedulePage> {
   }
 
   List<_ScheduleClass> get _clasesDiaSeleccionado {
-    return _obtenerClasesDelDia(_diaActual.day);
+    return _obtenerClasesParaFecha(
+      _lunesSemana.add(Duration(days: _diaSeleccionado)),
+    );
   }
 
   @override
@@ -221,6 +241,24 @@ class _SchedulePageState extends State<SchedulePage> {
 
       final List<Asignatura> asignaturas = resultados[1] as List<Asignatura>;
 
+      final bool requiereDatosAcademicos = asignaturas.any(
+        (asignatura) =>
+            asignatura.periodoAcademicoId?.trim().isNotEmpty == true,
+      );
+      final List<PeriodoAcademico> periodos;
+      final List<SesionClase> sesiones;
+      if (requiereDatosAcademicos) {
+        final complementos = await Future.wait([
+          _periodosService.obtenerTodos(),
+          _sesionesService.obtenerTodas(),
+        ]);
+        periodos = complementos[0] as List<PeriodoAcademico>;
+        sesiones = complementos[1] as List<SesionClase>;
+      } else {
+        periodos = const [];
+        sesiones = const [];
+      }
+
       if (perfil == null) {
         throw StateError('No existe el perfil del usuario.');
       }
@@ -240,6 +278,8 @@ class _SchedulePageState extends State<SchedulePage> {
       setState(() {
         _perfil = perfil;
         _asignaturas = asignaturas;
+        _periodos = periodos;
+        _sesiones = sesiones;
 
         _lunesSemana = semana.monday;
 
@@ -335,56 +375,47 @@ class _SchedulePageState extends State<SchedulePage> {
   // CLASES
   // =========================================================
 
-  List<_ScheduleClass> _obtenerClasesDelDia(DiaSemana dia) {
-    final List<_ScheduleClass> clases = [];
+  List<_ScheduleClass> _obtenerClasesParaFecha(DateTime fecha) {
+    final ocurrencias = _ocurrenciasService.obtenerParaFecha(
+      fecha: fecha,
+      asignaturas: _asignaturas,
+      periodos: _periodos,
+      sesiones: _sesiones,
+    );
 
-    for (
-      int indexAsignatura = 0;
-      indexAsignatura < _asignaturas.length;
-      indexAsignatura++
-    ) {
-      final Asignatura asignatura = _asignaturas[indexAsignatura];
-
-      final Color accent =
-          _accentColors[indexAsignatura % _accentColors.length];
-
-      for (
-        int blockIndex = 0;
-        blockIndex < asignatura.horario.length;
-        blockIndex++
-      ) {
-        final BloqueHorario bloque = asignatura.horario[blockIndex];
-
-        if (bloque.dia != dia) {
-          continue;
-        }
-
-        final String profesor = asignatura.profesor?.trim() ?? '';
-
-        final String salaBloque = bloque.sala?.trim() ?? '';
-
-        final String salaAsignatura = asignatura.sala?.trim() ?? '';
-
-        final String sala = salaBloque.isNotEmpty ? salaBloque : salaAsignatura;
-
-        clases.add(
-          _ScheduleClass(
-            asignatura: asignatura,
+    return ocurrencias
+        .map((ocurrencia) {
+          final asignaturaIndex = _asignaturas.indexWhere(
+            (asignatura) => asignatura.id == ocurrencia.asignatura.id,
+          );
+          final bloqueIndex = ocurrencia.bloqueIndex ?? -1;
+          final bloque = bloqueIndex >= 0
+              ? ocurrencia.asignatura.horario[bloqueIndex]
+              : BloqueHorario(
+                  dia: _diaActual.day,
+                  horaInicio: ocurrencia.horaInicio,
+                  horaFin: ocurrencia.horaFin,
+                  sala: ocurrencia.sala,
+                );
+          final profesor = ocurrencia.asignatura.profesor?.trim() ?? '';
+          final sala = ocurrencia.sala?.trim() ?? '';
+          return _ScheduleClass(
+            asignatura: ocurrencia.asignatura,
             bloque: bloque,
-            blockIndex: blockIndex,
+            blockIndex: bloqueIndex,
             professor: profesor.isNotEmpty
                 ? profesor
                 : (_espanol ? 'Sin profesor' : 'No teacher'),
             room: sala.isNotEmpty ? sala : (_espanol ? 'Sin sala' : 'No room'),
-            accent: accent,
-          ),
-        );
-      }
-    }
-
-    clases.sort((a, b) => a.bloque.horaInicio.compareTo(b.bloque.horaInicio));
-
-    return clases;
+            accent:
+                _accentColors[(asignaturaIndex < 0 ? 0 : asignaturaIndex) %
+                    _accentColors.length],
+            esFechaEspecifica:
+                ocurrencia.tipo == TipoOcurrenciaClase.fechaEspecifica,
+            esProvisional: ocurrencia.esProvisional,
+          );
+        })
+        .toList(growable: false);
   }
 
   // =========================================================
@@ -543,34 +574,6 @@ class _SchedulePageState extends State<SchedulePage> {
     }
 
     return '$cantidad subjects do not have schedule blocks yet.';
-  }
-
-  // =========================================================
-  // NAVEGACIÓN
-  // =========================================================
-
-  void _volverInicio() {
-    HapticFeedback.selectionClick();
-    MainNavigation.goTo(context, SeccionPrincipal.inicio);
-  }
-
-  void _volverArriba() {
-    scrollMainSectionToTop(context, _scrollController);
-  }
-
-  void _abrirIA() {
-    HapticFeedback.selectionClick();
-    MainNavigation.goTo(context, SeccionPrincipal.ia);
-  }
-
-  void _abrirCalendario() {
-    HapticFeedback.selectionClick();
-    MainNavigation.goTo(context, SeccionPrincipal.calendario);
-  }
-
-  void _abrirNotificaciones() {
-    HapticFeedback.selectionClick();
-    MainNavigation.goTo(context, SeccionPrincipal.notificaciones);
   }
 
   Future<void> _abrirAsignaturas() async {
@@ -873,6 +876,7 @@ class _SchedulePageState extends State<SchedulePage> {
       semestreMalla: original.semestreMalla,
       cursoNivel: original.cursoNivel,
       anioAcademico: original.anioAcademico,
+      periodoAcademicoId: original.periodoAcademicoId,
       modalidad: original.modalidad,
       lugar: original.lugar,
       institucion: original.institucion,
@@ -1051,7 +1055,11 @@ class _SchedulePageState extends State<SchedulePage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          _espanol ? 'ASIGNATURA' : 'SUBJECT',
+                          clase.esProvisional
+                              ? (_espanol
+                                    ? 'ASIGNATURA · PERÍODO PROVISIONAL'
+                                    : 'SUBJECT · PROVISIONAL PERIOD')
+                              : (_espanol ? 'ASIGNATURA' : 'SUBJECT'),
                           style: const TextStyle(
                             color: _primaryColor,
                             fontSize: 10.5,
@@ -1105,30 +1113,31 @@ class _SchedulePageState extends State<SchedulePage> {
                     },
                     itemBuilder: (context) {
                       return [
-                        PopupMenuItem<String>(
-                          value: 'edit',
-                          child: Row(
-                            children: [
-                              const Icon(
-                                Icons.edit_outlined,
-                                color: _primaryColor,
-                                size: 20,
-                              ),
-
-                              const SizedBox(width: 11),
-
-                              Text(
-                                _espanol ? 'Editar clase' : 'Edit class',
-                                style: TextStyle(
-                                  color: oscuro
-                                      ? const Color(0xFFF8FAFC)
-                                      : const Color(0xFF1F2937),
-                                  fontWeight: FontWeight.w600,
+                        if (!clase.esFechaEspecifica)
+                          PopupMenuItem<String>(
+                            value: 'edit',
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.edit_outlined,
+                                  color: _primaryColor,
+                                  size: 20,
                                 ),
-                              ),
-                            ],
+
+                                const SizedBox(width: 11),
+
+                                Text(
+                                  _espanol ? 'Editar clase' : 'Edit class',
+                                  style: TextStyle(
+                                    color: oscuro
+                                        ? const Color(0xFFF8FAFC)
+                                        : const Color(0xFF1F2937),
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
 
                         PopupMenuItem<String>(
                           value: 'details',
@@ -1288,7 +1297,7 @@ class _SchedulePageState extends State<SchedulePage> {
       return;
     }
 
-    if (accion == 'edit') {
+    if (accion == 'edit' && !clase.esFechaEspecifica) {
       final BloqueHorario? bloqueEditado = await showScheduleClassEditSheet(
         context: context,
         block: clase.bloque,
@@ -1364,6 +1373,16 @@ class _SchedulePageState extends State<SchedulePage> {
   // =========================================================
   // GESTIONAR HORARIOS
   // =========================================================
+
+  Future<void> _abrirDiagnosticoOcrHorario() async {
+    HapticFeedback.selectionClick();
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => HorarioOcrDiagnosticPage(spanish: _espanol),
+      ),
+    );
+    if (mounted) await _refrescar();
+  }
 
   Future<void> _gestionarHorarios() async {
     HapticFeedback.selectionClick();
@@ -1683,20 +1702,6 @@ class _SchedulePageState extends State<SchedulePage> {
               trailing: _buildCompactManageButton(oscuro),
             ),
           ),
-
-          MainBottomNav(
-            currentIndex: 1,
-
-            onHome: _volverInicio,
-
-            onSchedule: _volverArriba,
-
-            onAi: _abrirIA,
-
-            onCalendar: _abrirCalendario,
-
-            onNotifications: _abrirNotificaciones,
-          ),
         ],
       ),
     );
@@ -1804,22 +1809,53 @@ class _SchedulePageState extends State<SchedulePage> {
 
               const SizedBox(width: 12),
 
-              AppPressable(
-                scale: 0.90,
-                child: IconButton(
-                  onPressed: _gestionarHorarios,
-                  tooltip: _espanol ? 'Gestionar horarios' : 'Manage schedules',
-                  style: IconButton.styleFrom(
-                    backgroundColor: _primaryColor,
-                    foregroundColor: Colors.white,
-                    minimumSize: const Size(48, 48),
-                    maximumSize: const Size(48, 48),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(15),
+              Column(
+                children: [
+                  if (DeveloperToolsConfig.enabled) ...[
+                    AppPressable(
+                      scale: 0.90,
+                      child: IconButton(
+                        key: const Key('horario-ocr-diagnostic-button'),
+                        onPressed: _abrirDiagnosticoOcrHorario,
+                        tooltip: _espanol
+                            ? 'Diagnóstico OCR de horario'
+                            : 'Schedule OCR diagnostic',
+                        style: IconButton.styleFrom(
+                          backgroundColor: oscuro
+                              ? const Color(0xFF25252C)
+                              : const Color(0xFFF0F1FF),
+                          foregroundColor: _primaryColor,
+                          minimumSize: const Size(48, 48),
+                          maximumSize: const Size(48, 48),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(15),
+                          ),
+                        ),
+                        icon: const Icon(Icons.document_scanner_outlined),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                  AppPressable(
+                    scale: 0.90,
+                    child: IconButton(
+                      onPressed: _gestionarHorarios,
+                      tooltip: _espanol
+                          ? 'Gestionar horarios'
+                          : 'Manage schedules',
+                      style: IconButton.styleFrom(
+                        backgroundColor: _primaryColor,
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size(48, 48),
+                        maximumSize: const Size(48, 48),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(15),
+                        ),
+                      ),
+                      icon: const Icon(Ionicons.addOutline, size: 24),
                     ),
                   ),
-                  icon: const Icon(Ionicons.addOutline, size: 24),
-                ),
+                ],
               ),
             ],
           ),
@@ -1829,22 +1865,48 @@ class _SchedulePageState extends State<SchedulePage> {
   }
 
   Widget _buildCompactManageButton(bool oscuro) {
-    return AppPressable(
-      scale: 0.90,
-      child: IconButton(
-        onPressed: _gestionarHorarios,
-        tooltip: '',
-        style: IconButton.styleFrom(
-          backgroundColor: _primaryColor,
-          foregroundColor: Colors.white,
-          minimumSize: const Size(38, 38),
-          maximumSize: const Size(38, 38),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (DeveloperToolsConfig.enabled) ...[
+          AppPressable(
+            scale: 0.90,
+            child: IconButton(
+              onPressed: _abrirDiagnosticoOcrHorario,
+              tooltip: _espanol
+                  ? 'Diagnóstico OCR de horario'
+                  : 'Schedule OCR diagnostic',
+              style: IconButton.styleFrom(
+                foregroundColor: _primaryColor,
+                minimumSize: const Size(38, 38),
+                maximumSize: const Size(38, 38),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              icon: const Icon(Icons.document_scanner_outlined, size: 20),
+            ),
+          ),
+          const SizedBox(width: 4),
+        ],
+        AppPressable(
+          scale: 0.90,
+          child: IconButton(
+            onPressed: _gestionarHorarios,
+            tooltip: '',
+            style: IconButton.styleFrom(
+              backgroundColor: _primaryColor,
+              foregroundColor: Colors.white,
+              minimumSize: const Size(38, 38),
+              maximumSize: const Size(38, 38),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            icon: const Icon(Icons.add_rounded, size: 20),
           ),
         ),
-        icon: const Icon(Icons.add_rounded, size: 20),
-      ),
+      ],
     );
   }
 
@@ -2186,9 +2248,13 @@ class _SchedulePageState extends State<SchedulePage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'ASIGNATURA',
-                      style: TextStyle(
+                    Text(
+                      clase.esProvisional
+                          ? (_espanol
+                                ? 'ASIGNATURA · PROVISIONAL'
+                                : 'SUBJECT · PROVISIONAL')
+                          : (_espanol ? 'ASIGNATURA' : 'SUBJECT'),
+                      style: const TextStyle(
                         color: _primaryColor,
                         fontSize: 10,
                         fontWeight: FontWeight.w800,
@@ -2526,6 +2592,8 @@ class _ScheduleClass {
     required this.professor,
     required this.room,
     required this.accent,
+    this.esFechaEspecifica = false,
+    this.esProvisional = false,
   });
 
   final Asignatura asignatura;
@@ -2542,6 +2610,8 @@ class _ScheduleClass {
   final String room;
 
   final Color accent;
+  final bool esFechaEspecifica;
+  final bool esProvisional;
 }
 
 class _WeekSelection {

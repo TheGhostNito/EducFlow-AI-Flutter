@@ -75,6 +75,7 @@ class AsignaturasSqlCodec {
         correoProfesor: _textoNullable(fila['correo_profesor']),
         sala: _textoNullable(fila['sala']),
         periodo: _textoNullable(fila['periodo']),
+        periodoAcademicoId: _textoNullable(fila['periodo_academico_id']),
         horario: List.unmodifiable(bloquesPorAsignatura[id] ?? const []),
         estado: estadoAsignaturaDesdeFirestore(fila['estado']),
         origen: origenAsignaturaDesdeFirestore(fila['origen']),
@@ -104,6 +105,7 @@ class AsignaturasSqlCodec {
     'correo_profesor': _limpiar(asignatura.correoProfesor)?.toLowerCase(),
     'sala': _limpiar(asignatura.sala),
     'periodo': _limpiar(asignatura.periodo),
+    'periodo_academico_id': _limpiar(asignatura.periodoAcademicoId),
     'estado': asignatura.estado.valorFirestore,
     'origen': asignatura.origen.valorFirestore,
     'sigla': _limpiar(asignatura.sigla),
@@ -171,18 +173,18 @@ class SupabaseAsignaturasDataSource implements AsignaturasDataSource {
   final AsignaturasSqlCodec _codec;
   static int _canalSecuencia = 0;
 
-  static const _columnasAsignatura =
+  static const _columnasAsignaturaLegacy =
       'id, nombre, profesor, correo_profesor, sala, periodo, estado, origen, '
       'sigla, seccion, creditos, semestre_malla, curso_nivel, anio_academico, '
       'modalidad, lugar, institucion';
 
+  static const _columnasAsignatura =
+      '$_columnasAsignaturaLegacy, periodo_academico_id';
+
   @override
   Future<List<Asignatura>> obtenerTodas(String uid) async {
     final resultados = await Future.wait<dynamic>([
-      _supabase
-          .from('asignaturas')
-          .select(_columnasAsignatura)
-          .eq('usuario_uid', uid),
+      _obtenerFilasAsignaturas(uid),
       _supabase
           .from('bloques_horario')
           .select('asignatura_id, dia, hora_inicio, hora_fin, sala')
@@ -204,12 +206,7 @@ class SupabaseAsignaturasDataSource implements AsignaturasDataSource {
   @override
   Future<Asignatura?> obtenerPorId(String uid, String id) async {
     final resultados = await Future.wait<dynamic>([
-      _supabase
-          .from('asignaturas')
-          .select(_columnasAsignatura)
-          .eq('usuario_uid', uid)
-          .eq('id', id)
-          .maybeSingle(),
+      _obtenerFilaAsignatura(uid, id),
       _supabase
           .from('bloques_horario')
           .select('asignatura_id, dia, hora_inicio, hora_fin, sala')
@@ -231,6 +228,47 @@ class SupabaseAsignaturasDataSource implements AsignaturasDataSource {
           relaciones: _filas(resultados[2]),
         )
         .single;
+  }
+
+  Future<dynamic> _obtenerFilasAsignaturas(String uid) async {
+    try {
+      return await _supabase
+          .from('asignaturas')
+          .select(_columnasAsignatura)
+          .eq('usuario_uid', uid);
+    } on PostgrestException catch (error) {
+      if (!_esColumnaPeriodoNoDisponible(error)) rethrow;
+      return _supabase
+          .from('asignaturas')
+          .select(_columnasAsignaturaLegacy)
+          .eq('usuario_uid', uid);
+    }
+  }
+
+  Future<dynamic> _obtenerFilaAsignatura(String uid, String id) async {
+    try {
+      return await _supabase
+          .from('asignaturas')
+          .select(_columnasAsignatura)
+          .eq('usuario_uid', uid)
+          .eq('id', id)
+          .maybeSingle();
+    } on PostgrestException catch (error) {
+      if (!_esColumnaPeriodoNoDisponible(error)) rethrow;
+      return _supabase
+          .from('asignaturas')
+          .select(_columnasAsignaturaLegacy)
+          .eq('usuario_uid', uid)
+          .eq('id', id)
+          .maybeSingle();
+    }
+  }
+
+  bool _esColumnaPeriodoNoDisponible(PostgrestException error) {
+    final code = error.code?.toUpperCase() ?? '';
+    final message = '${error.message} ${error.details ?? ''}'.toLowerCase();
+    return (code == '42703' || code == 'PGRST204') &&
+        message.contains('periodo_academico_id');
   }
 
   @override

@@ -680,7 +680,6 @@ class _ProfilePageState extends State<ProfilePage> {
               progress: _progresoHeader,
               title: _espanol ? 'Perfil académico' : 'Academic profile',
               leading: _buildCompactBackButton(oscuro),
-              opaqueBackground: true,
             ),
           ),
         ],

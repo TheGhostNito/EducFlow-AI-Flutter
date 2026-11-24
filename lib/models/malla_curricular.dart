@@ -1,3 +1,5 @@
+import 'malla_multimodal_review.dart';
+
 class RamoMalla {
   RamoMalla({
     required this.id,
@@ -77,15 +79,31 @@ class MallaCurricular {
     required this.ramos,
     this.archivoNombre,
     this.especiales = const [],
+    this.multimodalReview,
+    this.multimodalDiagnostics,
   });
 
   final String id;
   final String? archivoNombre;
   final List<RamoMalla> ramos;
   final List<ElementoCurricularEspecial> especiales;
+  final MallaMultimodalReview? multimodalReview;
+  final MallaMultimodalDiagnostics? multimodalDiagnostics;
 
   List<int> get semestres =>
       ramos.map((ramo) => ramo.semestre).toSet().toList()..sort();
+
+  MallaCurricular withMultimodalReview(
+    MallaMultimodalReview? review, {
+    MallaMultimodalDiagnostics? diagnostics,
+  }) => MallaCurricular(
+    id: id,
+    archivoNombre: archivoNombre,
+    ramos: ramos,
+    especiales: especiales,
+    multimodalReview: review,
+    multimodalDiagnostics: diagnostics,
+  );
 }
 
 /// Acepta las dos estrategias de extracción sin deduplicar los espacios.

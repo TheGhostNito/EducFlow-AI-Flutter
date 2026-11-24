@@ -377,80 +377,7 @@ class _HomeCustomizationPageState extends State<HomeCustomizationPage> {
                     child: CircularProgressIndicator(color: _primaryColor),
                   ),
                 )
-              : Column(
-                  children: [
-                    _option(
-                      dark: dark,
-                      key: const Key('home-summary-switch'),
-                      icon: Icons.grid_view_rounded,
-                      title: _spanish
-                          ? 'Resumen académico'
-                          : 'Academic summary',
-                      description: _spanish
-                          ? 'Asignaturas, clases de hoy y próxima clase.'
-                          : 'Subjects, today’s classes and next class.',
-                      value: _preferences.summaryVisible,
-                      onChanged: (value) =>
-                          _save(_preferences.copyWith(summaryVisible: value)),
-                    ),
-                    _divider(dark),
-                    _option(
-                      dark: dark,
-                      key: const Key('home-classes-switch'),
-                      icon: Icons.today_outlined,
-                      title: _spanish ? 'Clases de hoy' : 'Today’s classes',
-                      description: _spanish
-                          ? 'Detalle de tus bloques programados para hoy.'
-                          : 'Details of your scheduled blocks for today.',
-                      value: _preferences.todayClassesVisible,
-                      onChanged: (value) => _save(
-                        _preferences.copyWith(todayClassesVisible: value),
-                      ),
-                    ),
-                    _divider(dark),
-                    _option(
-                      dark: dark,
-                      key: const Key('home-subjects-switch'),
-                      icon: Icons.menu_book_outlined,
-                      title: _spanish ? 'Mis asignaturas' : 'My subjects',
-                      description: _spanish
-                          ? 'Lista breve de tus asignaturas registradas.'
-                          : 'A short list of your registered subjects.',
-                      value: _preferences.subjectsVisible,
-                      onChanged: (value) =>
-                          _save(_preferences.copyWith(subjectsVisible: value)),
-                    ),
-                    _divider(dark),
-                    _option(
-                      dark: dark,
-                      key: const Key('home-next-task-switch'),
-                      icon: Icons.assignment_outlined,
-                      title: _spanish ? 'Próxima tarea' : 'Next task',
-                      description: _spanish
-                          ? 'Tu entrega pendiente más cercana.'
-                          : 'Your nearest pending deadline.',
-                      value: _preferences.nextTaskVisible,
-                      onChanged: (value) =>
-                          _save(_preferences.copyWith(nextTaskVisible: value)),
-                    ),
-                    _divider(dark),
-                    _option(
-                      dark: dark,
-                      key: const Key('home-next-evaluation-switch'),
-                      icon: Icons.school_outlined,
-                      title: _spanish
-                          ? 'Próxima evaluación'
-                          : 'Next evaluation',
-                      description: _spanish
-                          ? 'La siguiente evaluación de tu calendario.'
-                          : 'The next evaluation on your calendar.',
-                      value: _preferences.nextEvaluationVisible,
-                      onChanged: (value) => _save(
-                        _preferences.copyWith(nextEvaluationVisible: value),
-                      ),
-                    ),
-                  ],
-                ),
+              : _buildReorderableOptions(dark),
         ),
         const SizedBox(height: 26),
         Padding(
@@ -492,6 +419,7 @@ class _HomeCustomizationPageState extends State<HomeCustomizationPage> {
     required String description,
     required bool value,
     required ValueChanged<bool> onChanged,
+    Widget? trailing,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
@@ -536,6 +464,7 @@ class _HomeCustomizationPageState extends State<HomeCustomizationPage> {
             ),
           ),
           const SizedBox(width: 10),
+          if (trailing != null) ...[trailing, const SizedBox(width: 4)],
           Switch.adaptive(
             key: key,
             value: value,
@@ -546,6 +475,125 @@ class _HomeCustomizationPageState extends State<HomeCustomizationPage> {
         ],
       ),
     );
+  }
+
+  Widget _buildReorderableOptions(bool dark) {
+    final modules = _preferences.moduleOrder
+        .where((module) => module != HomeModule.studyReminders)
+        .toList(growable: false);
+    return ReorderableListView.builder(
+      key: const Key('home-modules-reorderable'),
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      buildDefaultDragHandles: false,
+      itemCount: modules.length,
+      onReorderItem: _saving
+          ? (_, _) {}
+          : (oldIndex, newIndex) {
+              final reordered = [...modules];
+              final item = reordered.removeAt(oldIndex);
+              reordered.insert(newIndex, item);
+              final complete = [
+                ...reordered,
+                if (_preferences.moduleOrder.contains(
+                  HomeModule.studyReminders,
+                ))
+                  HomeModule.studyReminders,
+              ];
+              _save(_preferences.copyWith(moduleOrder: complete));
+            },
+      itemBuilder: (context, index) {
+        final module = modules[index];
+        return Column(
+          key: ValueKey(module),
+          children: [
+            _moduleOption(
+              dark,
+              module,
+              ReorderableDragStartListener(
+                index: index,
+                child: const Padding(
+                  padding: EdgeInsets.all(8),
+                  child: Icon(Icons.drag_handle_rounded, size: 22),
+                ),
+              ),
+            ),
+            if (index < modules.length - 1) _divider(dark),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _moduleOption(bool dark, HomeModule module, Widget handle) {
+    return switch (module) {
+      HomeModule.summary => _option(
+        dark: dark,
+        key: const Key('home-summary-switch'),
+        icon: Icons.grid_view_rounded,
+        title: _spanish ? 'Resumen académico' : 'Academic summary',
+        description: _spanish
+            ? 'Asignaturas, clases de hoy y próxima clase.'
+            : 'Subjects, today’s classes and next class.',
+        value: _preferences.summaryVisible,
+        onChanged: (value) =>
+            _save(_preferences.copyWith(summaryVisible: value)),
+        trailing: handle,
+      ),
+      HomeModule.todayClasses => _option(
+        dark: dark,
+        key: const Key('home-classes-switch'),
+        icon: Icons.today_outlined,
+        title: _spanish ? 'Clases de hoy' : 'Today’s classes',
+        description: _spanish
+            ? 'Detalle de tus bloques programados para hoy.'
+            : 'Details of your scheduled blocks for today.',
+        value: _preferences.todayClassesVisible,
+        onChanged: (value) =>
+            _save(_preferences.copyWith(todayClassesVisible: value)),
+        trailing: handle,
+      ),
+      HomeModule.subjects => _option(
+        dark: dark,
+        key: const Key('home-subjects-switch'),
+        icon: Icons.menu_book_outlined,
+        title: _spanish ? 'Mis asignaturas' : 'My subjects',
+        description: _spanish
+            ? 'Lista breve de tus asignaturas registradas.'
+            : 'A short list of your registered subjects.',
+        value: _preferences.subjectsVisible,
+        onChanged: (value) =>
+            _save(_preferences.copyWith(subjectsVisible: value)),
+        trailing: handle,
+      ),
+      HomeModule.nextTask => _option(
+        dark: dark,
+        key: const Key('home-next-task-switch'),
+        icon: Icons.assignment_outlined,
+        title: _spanish ? 'Próxima tarea' : 'Next task',
+        description: _spanish
+            ? 'Tu entrega pendiente más cercana.'
+            : 'Your nearest pending deadline.',
+        value: _preferences.nextTaskVisible,
+        onChanged: (value) =>
+            _save(_preferences.copyWith(nextTaskVisible: value)),
+        trailing: handle,
+      ),
+      HomeModule.nextEvaluation => _option(
+        dark: dark,
+        key: const Key('home-next-evaluation-switch'),
+        icon: Icons.school_outlined,
+        title: _spanish ? 'Próxima evaluación' : 'Next evaluation',
+        description: _spanish
+            ? 'La siguiente evaluación de tu calendario.'
+            : 'The next evaluation on your calendar.',
+        value: _preferences.nextEvaluationVisible,
+        onChanged: (value) =>
+            _save(_preferences.copyWith(nextEvaluationVisible: value)),
+        trailing: handle,
+      ),
+      HomeModule.studyReminders => const SizedBox.shrink(),
+    };
   }
 
   Widget _buildResetButton(bool dark) {

@@ -16,6 +16,7 @@ class MainBottomNav extends StatefulWidget {
     required this.onCalendar,
     required this.onNotifications,
     this.showNotificationDot = false,
+    this.visible = true,
   });
 
   final int currentIndex;
@@ -29,6 +30,7 @@ class MainBottomNav extends StatefulWidget {
   // Se mantiene por compatibilidad con cualquier pantalla vieja
   // que todavía lo esté enviando manualmente.
   final bool showNotificationDot;
+  final bool visible;
 
   @override
   State<MainBottomNav> createState() => _MainBottomNavState();
@@ -88,87 +90,101 @@ class _MainBottomNavState extends State<MainBottomNav> {
       right: 0,
       bottom: bottom,
       child: Center(
-        child: Container(
-          width: barWidth,
-          height: barHeight,
-          padding: EdgeInsets.all(padding),
-          decoration: BoxDecoration(
-            color: oscuro ? const Color(0xFF191F29) : Colors.white,
-            borderRadius: BorderRadius.circular(mobile ? 21 : 23),
-            border: Border.all(
-              color: oscuro ? const Color(0xFF2D3541) : const Color(0xFFE3E6ED),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: oscuro
-                    ? const Color(0x4D000000)
-                    : const Color(0x2110172A),
-                blurRadius: 38,
-                offset: const Offset(0, 14),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: _NavigationButton(
-                  icon: Ionicons.home,
-                  active: widget.currentIndex == 0,
-                  oscuro: oscuro,
-                  mobile: mobile,
-                  onTap: widget.onHome,
-                ),
-              ),
-
-              const SizedBox(width: 4),
-
-              Expanded(
-                child: _NavigationButton(
-                  icon: Ionicons.timeOutline,
-                  active: widget.currentIndex == 1,
-                  oscuro: oscuro,
-                  mobile: mobile,
-                  onTap: widget.onSchedule,
-                ),
-              ),
-
-              const SizedBox(width: 4),
-
-              Expanded(
-                child: Center(
-                  child: _AiNavigationButton(
-                    oscuro: oscuro,
-                    onTap: widget.onAi,
+        child: AnimatedSlide(
+          duration: const Duration(milliseconds: 240),
+          curve: Curves.easeOutCubic,
+          offset: widget.visible ? Offset.zero : const Offset(0, 1.65),
+          child: AnimatedOpacity(
+            duration: const Duration(milliseconds: 180),
+            opacity: widget.visible ? 1 : 0,
+            child: IgnorePointer(
+              ignoring: !widget.visible,
+              child: Container(
+                width: barWidth,
+                height: barHeight,
+                padding: EdgeInsets.all(padding),
+                decoration: BoxDecoration(
+                  color: oscuro ? const Color(0xFF191F29) : Colors.white,
+                  borderRadius: BorderRadius.circular(mobile ? 21 : 23),
+                  border: Border.all(
+                    color: oscuro
+                        ? const Color(0xFF2D3541)
+                        : const Color(0xFFE3E6ED),
                   ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: oscuro
+                          ? const Color(0x4D000000)
+                          : const Color(0x2110172A),
+                      blurRadius: 38,
+                      offset: const Offset(0, 14),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _NavigationButton(
+                        icon: Ionicons.home,
+                        active: widget.currentIndex == 0,
+                        oscuro: oscuro,
+                        mobile: mobile,
+                        onTap: widget.onHome,
+                      ),
+                    ),
+
+                    const SizedBox(width: 4),
+
+                    Expanded(
+                      child: _NavigationButton(
+                        icon: Ionicons.timeOutline,
+                        active: widget.currentIndex == 1,
+                        oscuro: oscuro,
+                        mobile: mobile,
+                        onTap: widget.onSchedule,
+                      ),
+                    ),
+
+                    const SizedBox(width: 4),
+
+                    Expanded(
+                      child: Center(
+                        child: _AiNavigationButton(
+                          oscuro: oscuro,
+                          onTap: widget.onAi,
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(width: 4),
+
+                    Expanded(
+                      child: _NavigationButton(
+                        icon: Ionicons.calendarClearOutline,
+                        active: widget.currentIndex == 3,
+                        oscuro: oscuro,
+                        mobile: mobile,
+                        onTap: widget.onCalendar,
+                      ),
+                    ),
+
+                    const SizedBox(width: 4),
+
+                    Expanded(
+                      child: _NavigationButton(
+                        icon: Ionicons.notificationsOutline,
+                        active: widget.currentIndex == 4,
+                        oscuro: oscuro,
+                        mobile: mobile,
+                        showNotificationDot: widget.showNotificationDot,
+                        notificationCount: _badgeService.unreadCount,
+                        onTap: widget.onNotifications,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-
-              const SizedBox(width: 4),
-
-              Expanded(
-                child: _NavigationButton(
-                  icon: Ionicons.calendarClearOutline,
-                  active: widget.currentIndex == 3,
-                  oscuro: oscuro,
-                  mobile: mobile,
-                  onTap: widget.onCalendar,
-                ),
-              ),
-
-              const SizedBox(width: 4),
-
-              Expanded(
-                child: _NavigationButton(
-                  icon: Ionicons.notificationsOutline,
-                  active: widget.currentIndex == 4,
-                  oscuro: oscuro,
-                  mobile: mobile,
-                  showNotificationDot: widget.showNotificationDot,
-                  notificationCount: _badgeService.unreadCount,
-                  onTap: widget.onNotifications,
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),

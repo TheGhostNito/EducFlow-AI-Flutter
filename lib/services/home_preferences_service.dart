@@ -4,6 +4,27 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart'
     show Supabase, SupabaseClient;
 
+enum HomeModule {
+  summary('resumenAcademico'),
+  nextTask('proximaTarea'),
+  nextEvaluation('proximaEvaluacion'),
+  studyReminders('recordatoriosEstudio'),
+  todayClasses('clasesHoy'),
+  subjects('misAsignaturas');
+
+  const HomeModule(this.storageKey);
+  final String storageKey;
+}
+
+const List<HomeModule> defaultHomeModuleOrder = [
+  HomeModule.summary,
+  HomeModule.nextTask,
+  HomeModule.nextEvaluation,
+  HomeModule.studyReminders,
+  HomeModule.todayClasses,
+  HomeModule.subjects,
+];
+
 @immutable
 class HomePreferences {
   const HomePreferences({
@@ -14,6 +35,7 @@ class HomePreferences {
     required this.nextEvaluationVisible,
     required this.studyRemindersVisible,
     required this.smartSummaryVisible,
+    this.moduleOrder = defaultHomeModuleOrder,
   });
 
   final bool summaryVisible;
@@ -23,6 +45,7 @@ class HomePreferences {
   final bool nextEvaluationVisible;
   final bool studyRemindersVisible;
   final bool smartSummaryVisible;
+  final List<HomeModule> moduleOrder;
 
   static const HomePreferences defaults = HomePreferences(
     summaryVisible: true,
@@ -32,6 +55,7 @@ class HomePreferences {
     nextEvaluationVisible: true,
     studyRemindersVisible: true,
     smartSummaryVisible: true,
+    moduleOrder: defaultHomeModuleOrder,
   );
 
   factory HomePreferences.fromDatabase(Map<String, dynamic> values) {
@@ -54,6 +78,7 @@ class HomePreferences {
         'resumenInteligente',
         defaults.smartSummaryVisible,
       ),
+      moduleOrder: _readModuleOrder(values['ordenModulos']),
     );
   }
 
@@ -65,6 +90,7 @@ class HomePreferences {
     'proximaEvaluacion': nextEvaluationVisible,
     'recordatoriosEstudio': studyRemindersVisible,
     'resumenInteligente': smartSummaryVisible,
+    'ordenModulos': moduleOrder.map((module) => module.storageKey).toList(),
   };
 
   HomePreferences copyWith({
@@ -75,6 +101,7 @@ class HomePreferences {
     bool? nextEvaluationVisible,
     bool? studyRemindersVisible,
     bool? smartSummaryVisible,
+    List<HomeModule>? moduleOrder,
   }) {
     return HomePreferences(
       summaryVisible: summaryVisible ?? this.summaryVisible,
@@ -86,6 +113,7 @@ class HomePreferences {
       studyRemindersVisible:
           studyRemindersVisible ?? this.studyRemindersVisible,
       smartSummaryVisible: smartSummaryVisible ?? this.smartSummaryVisible,
+      moduleOrder: List.unmodifiable(moduleOrder ?? this.moduleOrder),
     );
   }
 
@@ -98,7 +126,8 @@ class HomePreferences {
         other.nextTaskVisible == nextTaskVisible &&
         other.nextEvaluationVisible == nextEvaluationVisible &&
         other.studyRemindersVisible == studyRemindersVisible &&
-        other.smartSummaryVisible == smartSummaryVisible;
+        other.smartSummaryVisible == smartSummaryVisible &&
+        listEquals(other.moduleOrder, moduleOrder);
   }
 
   @override
@@ -110,7 +139,25 @@ class HomePreferences {
     nextEvaluationVisible,
     studyRemindersVisible,
     smartSummaryVisible,
+    Object.hashAll(moduleOrder),
   );
+
+  static List<HomeModule> _readModuleOrder(Object? value) {
+    final raw = value is List ? value : const [];
+    final parsed = <HomeModule>[];
+    for (final item in raw) {
+      for (final module in HomeModule.values) {
+        if (module.storageKey == item?.toString() && !parsed.contains(module)) {
+          parsed.add(module);
+          break;
+        }
+      }
+    }
+    for (final module in defaultHomeModuleOrder) {
+      if (!parsed.contains(module)) parsed.add(module);
+    }
+    return List.unmodifiable(parsed);
+  }
 }
 
 abstract interface class HomePreferencesDataSource {
@@ -239,6 +286,9 @@ class HomePreferencesService extends ChangeNotifier {
       smartSummaryVisible:
           local.getBool(_key(uid, 'smart-summary-visible')) ??
           HomePreferences.defaults.smartSummaryVisible,
+      moduleOrder: HomePreferences._readModuleOrder(
+        local.getStringList(_key(uid, 'module-order')),
+      ),
     );
 
     _memoryCache[uid] = preferences;
@@ -267,6 +317,10 @@ class HomePreferencesService extends ChangeNotifier {
       local.setBool(
         _key(uid, 'today-classes-visible'),
         preferences.todayClassesVisible,
+      ),
+      local.setStringList(
+        _key(uid, 'module-order'),
+        preferences.moduleOrder.map((module) => module.storageKey).toList(),
       ),
       local.setBool(_key(uid, 'subjects-visible'), preferences.subjectsVisible),
       local.setBool(

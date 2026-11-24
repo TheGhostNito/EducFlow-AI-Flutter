@@ -1,5 +1,9 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' show Supabase;
+import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart'
+    show FunctionException, PostgrestException, Supabase;
 
 import '../core/auth/session_controller.dart';
 import '../models/perfil_usuario.dart';
@@ -62,21 +66,42 @@ class SessionPreparationService {
     SessionValidityGuard isValid,
   ) async {
     _checkValid(isValid);
-    await ensureRole(identity, isValid);
+    await _runStage('ensure_role', () => ensureRole(identity, isValid));
     _checkValid(isValid);
 
-    final profile = await ensureProfile(identity, registration, isValid);
+    final profile = await _runStage(
+      'ensure_profile',
+      () => ensureProfile(identity, registration, isValid),
+    );
     _checkValid(isValid);
 
-    await ensureCompatibilityRoot(identity, registration, profile, isValid);
+    await _runStage(
+      'ensure_initial_preferences',
+      () => ensureCompatibilityRoot(identity, registration, profile, isValid),
+    );
     _checkValid(isValid);
 
     // La lectura no cambia el estado visual global. Las tres preferencias se
     // aplican juntas únicamente después de validar de nuevo UID y generación.
-    final preferences = await loadPreferences(identity.uid);
+    final preferences = await _runStage(
+      'load_preferences',
+      () => loadPreferences(identity.uid),
+    );
     _checkValid(isValid);
-    applyPreferences(preferences);
+    await _runStage('apply_preferences', () => applyPreferences(preferences));
     _checkValid(isValid);
+  }
+
+  static Future<T> _runStage<T>(
+    String stage,
+    FutureOr<T> Function() action,
+  ) async {
+    try {
+      return await action();
+    } catch (error) {
+      SessionPreparationDiagnostics.log(stage, error);
+      rethrow;
+    }
   }
 
   static Future<void> _ensureSupabaseRole(
@@ -187,4 +212,42 @@ class SessionPreparationService {
 
 class SessionPreparationInvalidated implements Exception {
   const SessionPreparationInvalidated();
+}
+
+@visibleForTesting
+class SessionPreparationDiagnostics {
+  const SessionPreparationDiagnostics._();
+
+  static void log(String stage, Object error) {
+    if (!kDebugMode) return;
+    debugPrint(
+      'Session preparation failed: stage=${_safeIdentifier(stage)}; '
+      '${safeError(error)}',
+    );
+  }
+
+  static String safeError(Object error) {
+    if (error is FirebaseAuthException) {
+      return 'type=FirebaseAuthException; code=${_safeIdentifier(error.code)}';
+    }
+    if (error is FunctionException) {
+      return 'type=FunctionException; status=${error.status}';
+    }
+    if (error is PostgrestException) {
+      return 'type=PostgrestException; '
+          'code=${_safeIdentifier(error.code ?? 'unknown')}';
+    }
+    if (error is TimeoutException) {
+      return 'type=TimeoutException';
+    }
+    if (error is SessionPreparationInvalidated) {
+      return 'type=SessionPreparationInvalidated';
+    }
+    return 'type=${_safeIdentifier(error.runtimeType.toString())}';
+  }
+
+  static String _safeIdentifier(String value) {
+    final sanitized = value.replaceAll(RegExp(r'[^A-Za-z0-9_.-]'), '_');
+    return sanitized.length <= 64 ? sanitized : sanitized.substring(0, 64);
+  }
 }

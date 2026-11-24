@@ -157,8 +157,8 @@ class _EducationLevelSheet extends StatelessWidget {
 
                       Text(
                         spanish
-                            ? 'Esto nos permite adaptar EduFlow AI a tu etapa académica y mostrarte solo las herramientas que necesitas.'
-                            : 'This helps us adapt EduFlow AI to your academic stage and show only the tools you need.',
+                            ? 'Esto nos permite adaptar EducFlow AI a tu etapa académica y mostrarte solo las herramientas que necesitas.'
+                            : 'This helps us adapt EducFlow AI to your academic stage and show only the tools you need.',
                         style: TextStyle(
                           color: dark
                               ? const Color(0xFFA9B1BF)

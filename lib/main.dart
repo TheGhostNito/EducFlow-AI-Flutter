@@ -7,7 +7,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'core/auth/auth_gate.dart';
-import 'firebase_options.dart';
+import 'core/config/app_check_provider_config.dart';
+import 'core/config/app_environment_config.dart';
+import 'core/config/backend_config.dart';
 import 'services/academic_notification_scheduler.dart';
 import 'services/notification_service.dart';
 import 'services/theme_service.dart';
@@ -18,10 +20,15 @@ import 'widgets/web_app_frame.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await AppEnvironmentConfig.validateNativeEnvironment();
+  await Firebase.initializeApp(options: AppEnvironmentConfig.firebaseOptions);
+  AppEnvironmentConfig.validateFirebase(Firebase.app().options);
+  AppEnvironmentConfig.validateSupabaseProjectRef(
+    BackendConfig.supabaseProjectRef,
+  );
   await Supabase.initialize(
-    url: 'https://ubjmdfwkjgblnjgmufpc.supabase.co',
-    publishableKey: 'sb_publishable_DmUj02VfZSkZOzoR11oq5A_TumX6rfA',
+    url: BackendConfig.supabaseUrl,
+    publishableKey: BackendConfig.supabasePublishableKey,
     debug: kDebugMode,
     accessToken: () async {
       final user = FirebaseAuth.instance.currentUser;
@@ -45,12 +52,26 @@ Future<void> main() async {
         : ReCaptchaEnterpriseProvider(
             '6LdGGaYtAAAAAGORi9HkV80j_msD4ew0hj6GhSfy',
           ),
-    providerAndroid: kDebugMode
-        ? const AndroidDebugProvider()
-        : const AndroidReCaptchaProvider(
-            '6LemJJktAAAAAPrGBEktKtMQTFzvD2mzBZy70wUB',
-          ),
+    providerAndroid: AppCheckProviderConfig.android(debugBuild: kDebugMode),
   );
+  if (kDebugMode) {
+    try {
+      final ready = await AppCheckProviderConfig.verifyDebugAttestation(
+        debugBuild: true,
+        getToken: FirebaseAppCheck.instance.getToken,
+      );
+      debugPrint(
+        ready == true
+            ? 'Firebase App Check debug attestation: ready.'
+            : 'Firebase App Check debug attestation: pending.',
+      );
+    } catch (error) {
+      debugPrint(
+        'Firebase App Check debug attestation: pending '
+        '(${error.runtimeType}).',
+      );
+    }
+  }
 
   await TranslationService.instance.initialize();
   await ThemeService.instance.initialize();

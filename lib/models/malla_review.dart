@@ -22,6 +22,42 @@ class MallaReviewIssue {
           : 'Check which elective belongs in this slot',
     'semester_uncertain' =>
       spanish ? 'Comprueba el semestre' : 'Check the semester',
+    'gemini_additional_course' =>
+      spanish
+          ? 'Confirma la asignatura propuesta por la IA'
+          : 'Confirm the course proposed by AI',
+    'gemini_name_conflict' =>
+      spanish
+          ? 'La extracción y la revisión de IA proponen nombres distintos'
+          : 'Extraction and AI review propose different names',
+    'gemini_code_conflict' =>
+      spanish
+          ? 'La extracción y la revisión de IA proponen códigos distintos'
+          : 'Extraction and AI review propose different codes',
+    'gemini_name_uncertain' =>
+      spanish ? 'Comprueba el nombre propuesto' : 'Check the proposed name',
+    'gemini_code_uncertain' =>
+      spanish ? 'Comprueba el código propuesto' : 'Check the proposed code',
+    'gemini_credits_uncertain' =>
+      spanish
+          ? 'Comprueba los créditos propuestos'
+          : 'Check the proposed credits',
+    'gemini_category_uncertain' =>
+      spanish
+          ? 'Comprueba la categoría propuesta'
+          : 'Check the proposed category',
+    'gemini_credits_conflict' =>
+      spanish
+          ? 'La extracción y la revisión de IA proponen créditos distintos'
+          : 'Extraction and AI review propose different credits',
+    'gemini_period_conflict' || 'gemini_period_invalid' =>
+      spanish ? 'Comprueba el período propuesto' : 'Check the proposed period',
+    'gemini_period_uncertain' =>
+      spanish ? 'Comprueba el período propuesto' : 'Check the proposed period',
+    'gemini_change_without_evidence' || 'gemini_change_uncertain' =>
+      spanish
+          ? 'Comprueba esta propuesta con la malla original'
+          : 'Check this proposal against the original curriculum',
     'duplicate_code' =>
       spanish
           ? 'Código compartido con ${relatedNames.join(', ')}'
@@ -44,6 +80,7 @@ class MallaReviewRules {
     required String? code,
     required int? credits,
     required bool verifyOther,
+    bool verifyMissingCode = false,
     bool deriveMissing = false,
   }) {
     final reasons =
@@ -53,7 +90,9 @@ class MallaReviewRules {
     final kept = [
       for (final reason in reasons)
         if (reason == 'credits_missing' && credits == null ||
-            reason == 'code_missing' && normalizedCode(code) == null ||
+            reason == 'code_missing' &&
+                normalizedCode(code) == null &&
+                !verifyMissingCode ||
             reason != 'credits_missing' &&
                 reason != 'code_missing' &&
                 !verifyOther)
@@ -61,7 +100,9 @@ class MallaReviewRules {
     ];
     if (deriveMissing) {
       if (credits == null) kept.add('credits_missing');
-      if (normalizedCode(code) == null) kept.add('code_missing');
+      if (normalizedCode(code) == null && !verifyMissingCode) {
+        kept.add('code_missing');
+      }
     }
     return kept.toSet().toList();
   }
@@ -97,7 +138,9 @@ class MallaReviewRules {
     final issues = [
       for (final reason in reasons)
         MallaReviewIssue(reason, switch (reason) {
-          'credits_missing' || 'elective_slot' => MallaReviewPriority.high,
+          'credits_missing' ||
+          'elective_slot' ||
+          'gemini_credits_conflict' => MallaReviewPriority.high,
           'code_missing' || 'semester_uncertain' => MallaReviewPriority.medium,
           _ => MallaReviewPriority.verification,
         }, const []),

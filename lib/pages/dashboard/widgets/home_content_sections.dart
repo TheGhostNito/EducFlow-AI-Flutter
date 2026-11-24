@@ -28,19 +28,30 @@ class HomeContentSections extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final List<Widget> visible = [
-      if (preferences.summaryVisible && summary != null) summary!,
-      if (preferences.smartSummaryVisible && smartSummary != null)
-        smartSummary!,
-      if (preferences.nextTaskVisible && nextTask != null) nextTask!,
-      if (preferences.nextEvaluationVisible && nextEvaluation != null)
-        nextEvaluation!,
-      if (preferences.studyRemindersVisible && studyReminder != null)
-        studyReminder!,
-      if (preferences.todayClassesVisible && todayClasses != null)
-        todayClasses!,
-      if (preferences.subjectsVisible && subjects != null) subjects!,
-    ];
+    final byModule = <HomeModule, Widget?>{
+      HomeModule.summary: preferences.summaryVisible ? summary : null,
+      HomeModule.nextTask: preferences.nextTaskVisible ? nextTask : null,
+      HomeModule.nextEvaluation: preferences.nextEvaluationVisible
+          ? nextEvaluation
+          : null,
+      HomeModule.studyReminders: preferences.studyRemindersVisible
+          ? studyReminder
+          : null,
+      HomeModule.todayClasses: preferences.todayClassesVisible
+          ? todayClasses
+          : null,
+      HomeModule.subjects: preferences.subjectsVisible ? subjects : null,
+    };
+    final List<Widget> visible = [];
+    for (final module in preferences.moduleOrder) {
+      final widget = byModule[module];
+      if (widget != null) visible.add(widget);
+    }
+    if (preferences.smartSummaryVisible && smartSummary != null) {
+      // Resumen inteligente conserva una posición fija y no participa del
+      // orden académico configurable por ahora.
+      visible.insert(visible.isEmpty ? 0 : 1, smartSummary!);
+    }
 
     if (visible.isEmpty) return emptyState ?? const SizedBox.shrink();
 

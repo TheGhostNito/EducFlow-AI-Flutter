@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:ionicons/ionicons.dart';
 
-import '../../core/navigation/main_navigation.dart';
-
 import '../../models/asignatura.dart';
 import '../../models/evaluacion.dart';
 import '../../models/notificacion_app.dart';
@@ -19,8 +17,6 @@ import '../../widgets/app_pressable.dart';
 import '../../widgets/app_reveal.dart';
 import '../../widgets/app_scroll_header.dart';
 import '../../widgets/app_status_snackbar.dart';
-import '../../widgets/main_bottom_nav.dart';
-import '../../widgets/main_section_scroll.dart';
 import '../../core/auth/auth_service.dart';
 import '../../models/perfil_usuario.dart';
 import '../../services/perfil_service.dart';
@@ -1267,7 +1263,10 @@ class _NotificationsPageState extends State<NotificationsPage> {
         await showCalendarClassDetailSheet(
           context: context,
           subject: clase.asignatura,
-          block: clase.bloque,
+          startTime: clase.bloque.horaInicio,
+          endTime: clase.bloque.horaFin,
+          room: clase.bloque.sala,
+          editable: true,
           spanish: _espanol,
         );
 
@@ -1365,6 +1364,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
       semestreMalla: original.semestreMalla,
       cursoNivel: original.cursoNivel,
       anioAcademico: original.anioAcademico,
+      periodoAcademicoId: original.periodoAcademicoId,
       modalidad: original.modalidad,
       lugar: original.lugar,
       institucion: original.institucion,
@@ -1764,34 +1764,6 @@ class _NotificationsPageState extends State<NotificationsPage> {
   }
 
   // =========================================================
-  // NAVEGACIÓN
-  // =========================================================
-
-  void _volverInicio() {
-    HapticFeedback.selectionClick();
-    MainNavigation.goTo(context, SeccionPrincipal.inicio);
-  }
-
-  void _volverArriba() {
-    scrollMainSectionToTop(context, _scrollController);
-  }
-
-  void _abrirIA() {
-    HapticFeedback.selectionClick();
-    MainNavigation.goTo(context, SeccionPrincipal.ia);
-  }
-
-  void _abrirHorario() {
-    HapticFeedback.selectionClick();
-    MainNavigation.goTo(context, SeccionPrincipal.horario);
-  }
-
-  void _abrirCalendario() {
-    HapticFeedback.selectionClick();
-    MainNavigation.goTo(context, SeccionPrincipal.calendario);
-  }
-
-  // =========================================================
   // TEXTOS / COLORES
   // =========================================================
 
@@ -1960,14 +1932,6 @@ class _NotificationsPageState extends State<NotificationsPage> {
               title: _espanol ? 'Notificaciones' : 'Notifications',
               trailing: _buildCompactReadAllButton(oscuro),
             ),
-          ),
-          MainBottomNav(
-            currentIndex: 4,
-            onHome: _volverInicio,
-            onSchedule: _abrirHorario,
-            onAi: _abrirIA,
-            onCalendar: _abrirCalendario,
-            onNotifications: _volverArriba,
           ),
         ],
       ),

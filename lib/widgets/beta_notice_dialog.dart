@@ -23,23 +23,25 @@ Future<void> showBetaNoticeDialog(
 
   final String title = welcome
       ? (spanish ? 'Bienvenido a EducFlow AI' : 'Welcome to EducFlow AI')
-      : (spanish ? 'EducFlow AI está en beta' : 'EducFlow AI is in beta');
+      : (spanish
+            ? 'Uso responsable del asistente'
+            : 'Responsible assistant use');
 
   final String description = welcome
       ? (spanish
-            ? 'Estás usando la Beta 0.1 de la aplicación. Algunas funciones pueden fallar, cambiar o comportarse de forma inesperada durante las pruebas.'
-            : 'You are using version 0.1 Beta of the app. Some features may fail, change, or behave unexpectedly during testing.')
+            ? 'Organiza tus asignaturas, horarios, tareas y evaluaciones en un solo lugar. Completa tu perfil para personalizar la experiencia.'
+            : 'Organize your subjects, schedules, tasks and evaluations in one place. Complete your profile to personalize the experience.')
       : (spanish
-            ? 'Durante la Beta 0.1, las consultas de IA tienen una cuota limitada. Evita enviar muchas preguntas seguidas: si se alcanza el límite, tendrás que esperar antes de volver a consultar.'
-            : 'During Beta 0.1, AI requests have a limited quota. Avoid sending many questions in a row: if the limit is reached, you will need to wait before asking again.');
+            ? 'Las consultas de IA tienen límites de uso. Si se alcanza temporalmente la cuota, espera unos minutos antes de volver a consultar.'
+            : 'AI requests have usage limits. If the quota is temporarily reached, wait a few minutes before trying again.');
 
   final String secondary = welcome
       ? (spanish
-            ? 'Si encuentras algún problema, anótalo para que podamos corregirlo antes de una versión pública.'
-            : 'If you find an issue, keep note of it so it can be fixed before a public release.')
+            ? 'Revisa la información importada y las sugerencias de IA antes de confirmarlas.'
+            : 'Review imported information and AI suggestions before confirming them.')
       : (spanish
-            ? 'El límite es temporal y no afecta tus datos guardados en EduFlow.'
-            : 'The limit is temporary and does not affect your saved EduFlow data.');
+            ? 'La IA puede cometer errores. Confirma siempre fechas, datos académicos y cambios antes de utilizarlos.'
+            : 'AI can make mistakes. Always confirm dates, academic data and changes before using them.');
 
   await Navigator.of(context, rootNavigator: true).push<void>(
     _BetaNoticeDialogRoute(
@@ -109,7 +111,7 @@ Future<void> showBetaNoticeDialog(
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
-                              'BETA ${BetaNoticeService.betaVersion}',
+                              'EDUCFLOW AI',
                               style: const TextStyle(
                                 color: Color(0xFF777BFF),
                                 fontSize: 9.5,
@@ -173,7 +175,7 @@ Future<void> showBetaNoticeDialog(
                     children: [
                       Icon(
                         welcome
-                            ? Icons.bug_report_outlined
+                            ? Icons.fact_check_outlined
                             : Icons.hourglass_top_rounded,
                         size: 18,
                         color: const Color(0xFF777BFF),

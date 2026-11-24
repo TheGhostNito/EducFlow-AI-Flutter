@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../../models/asignatura.dart';
 import '../../../models/tarea.dart';
 import '../../../services/time_format_service.dart';
+import '../../../services/study_plan_task_metadata.dart';
 import '../../../widgets/academic_schedule_picker.dart';
 
 class TaskEditResult {
@@ -94,6 +95,8 @@ class _TaskEditSheetState extends State<_TaskEditSheet> {
   bool _showErrors = false;
 
   bool get _editing => widget.task != null;
+  bool get _studySession =>
+      widget.task != null && StudyPlanTaskMetadata.isStudySession(widget.task!);
 
   Asignatura? get _selectedSubject {
     final String? id = _subjectId;
@@ -117,7 +120,7 @@ class _TaskEditSheetState extends State<_TaskEditSheet> {
     _titleController = TextEditingController(text: task?.titulo ?? '');
 
     _descriptionController = TextEditingController(
-      text: task?.descripcion ?? '',
+      text: StudyPlanTaskMetadata.visibleDescription(task?.descripcion),
     );
 
     _priority = task?.prioridad ?? PrioridadTarea.media;
@@ -564,13 +567,17 @@ class _TaskEditSheetState extends State<_TaskEditSheet> {
     }
 
     final String description = _cleanNullable(_descriptionController.text);
+    final String? protectedDescription = StudyPlanTaskMetadata.preserveMarkers(
+      originalDescription: widget.task?.descripcion,
+      editedVisibleDescription: description,
+    );
 
     HapticFeedback.selectionClick();
 
     Navigator.of(context).pop(
       TaskEditResult(
         title: title,
-        description: description.isEmpty ? null : description,
+        description: protectedDescription,
         subjectId: _subjectId,
         priority: _priority,
         dueDate: _dueDate,
@@ -644,7 +651,13 @@ class _TaskEditSheetState extends State<_TaskEditSheet> {
 
                         Text(
                           _editing
-                              ? (widget.spanish ? 'Editar tarea' : 'Edit task')
+                              ? (_studySession
+                                    ? (widget.spanish
+                                          ? 'Editar sesión de estudio'
+                                          : 'Edit study session')
+                                    : (widget.spanish
+                                          ? 'Editar tarea'
+                                          : 'Edit task'))
                               : (widget.spanish ? 'Nueva tarea' : 'New task'),
                           style: TextStyle(
                             color: dark
@@ -824,7 +837,9 @@ class _TaskEditSheetState extends State<_TaskEditSheet> {
               _buildSelectorField(
                 fieldKey: const ValueKey('task-date-field'),
                 dark: dark,
-                label: widget.spanish ? 'Fecha de entrega' : 'Due date',
+                label: _studySession
+                    ? (widget.spanish ? 'Fecha de la sesión' : 'Session date')
+                    : (widget.spanish ? 'Fecha de entrega' : 'Due date'),
                 value: _dueDate == null
                     ? (widget.spanish ? 'Sin fecha' : 'No date')
                     : _displayDate(_dueDate!),
@@ -838,7 +853,9 @@ class _TaskEditSheetState extends State<_TaskEditSheet> {
               _buildSelectorField(
                 fieldKey: const ValueKey('task-time-field'),
                 dark: dark,
-                label: widget.spanish ? 'Hora límite' : 'Due time',
+                label: _studySession
+                    ? (widget.spanish ? 'Hora de inicio' : 'Start time')
+                    : (widget.spanish ? 'Hora límite' : 'Due time'),
                 value: _dueDate == null
                     ? (widget.spanish
                           ? 'Agrega una fecha primero'

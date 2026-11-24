@@ -59,14 +59,15 @@ app.*.map.json
 /.agents/
 /.codex/
 
-# Pruebas y laboratorios locales; conservar en disco.
-/test/
+# Laboratorios locales; conservar en disco.
+/test/private/
 /ios/RunnerTests/
 /supabase/functions/chat-crypto/index_test.ts
 /testing_runner/
 /lib/testing/
 /supabase/testing/
 /supabase/proposals/
+/supabase/.temp/
 /tools/
 
 # Informes y evidencias ajenos al paquete ejecutable.
@@ -90,3 +91,4 @@ app.*.map.json
 *.sql.gz
 .env
 .env.*
+/config/*.local.json

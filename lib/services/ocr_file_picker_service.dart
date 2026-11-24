@@ -20,13 +20,7 @@ class OcrFilePickerService {
   Future<OcrPickedFile?> pickDocument() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: const [
-        'jpg',
-        'jpeg',
-        'png',
-        'webp',
-        'pdf',
-      ],
+      allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
       allowMultiple: false,
       withData: true,
     );
@@ -44,7 +38,7 @@ class OcrFilePickerService {
       );
     }
 
-    final mimeType = _mimeTypeFromExtension(file.extension);
+    final mimeType = mimeTypeFromFileName(file.name);
 
     return OcrPickedFile(
       name: file.name,
@@ -54,8 +48,10 @@ class OcrFilePickerService {
     );
   }
 
-  String _mimeTypeFromExtension(String? extension) {
-    switch (extension?.toLowerCase()) {
+  static String mimeTypeFromFileName(String fileName) {
+    final separator = fileName.lastIndexOf('.');
+    final extension = separator < 0 ? '' : fileName.substring(separator + 1);
+    switch (extension.toLowerCase()) {
       case 'jpg':
       case 'jpeg':
         return 'image/jpeg';
@@ -70,9 +66,7 @@ class OcrFilePickerService {
         return 'application/pdf';
 
       default:
-        throw ArgumentError(
-          'Tipo de archivo no compatible con OCR.',
-        );
+        throw ArgumentError('Tipo de archivo no compatible con OCR.');
     }
   }
 }
